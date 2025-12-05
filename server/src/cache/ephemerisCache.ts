@@ -20,6 +20,14 @@ export interface EphemerisBody {
   vy?: number;
   vz?: number;
   velocityUnit?: string;
+  timestamp?: string;
+  range_au?: number;
+  range_rate_km_s?: number;
+  light_time_minutes?: number;
+  solar_elongation_deg?: number;
+  phase_angle_deg?: number;
+  illumination_fraction?: number;
+  apparent_magnitude?: number;
 }
 
 export interface EphemerisSnapshot {
@@ -169,7 +177,15 @@ async function buildPlanetSnapshot(correlationId?: string): Promise<EphemerisSna
       vx: r.vx_au_per_day,
       vy: r.vy_au_per_day,
       vz: r.vz_au_per_day,
-      velocityUnit: r.velocityUnit
+      velocityUnit: r.velocityUnit,
+      timestamp: r.timestamp,
+      range_au: r.range_au,
+      range_rate_km_s: r.range_rate_km_s,
+      light_time_minutes: r.light_time_minutes,
+      solar_elongation_deg: r.solar_elongation_deg,
+      phase_angle_deg: r.phase_angle_deg,
+      illumination_fraction: r.illumination_fraction,
+      apparent_magnitude: r.apparent_magnitude
     }))
   };
 }

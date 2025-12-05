@@ -176,6 +176,46 @@ export interface PlanetPosition {
    * Unité des vitesses (ex: "AU/d" ou "km/s"), si tu veux être explicite.
    */
   velocityUnit?: string;
+
+  /**
+   * Horodatage associé au vecteur d’état (si fourni par le backend).
+   */
+  timestamp?: string;
+
+  /**
+   * Distance géocentrique renvoyée par Horizons (si disponible) en UA.
+   */
+  range_au?: number;
+
+  /**
+   * Vitesse radiale géocentrique en km/s (si demandée).
+   */
+  range_rate_km_s?: number;
+
+  /**
+   * Temps de trajet lumière aller simple (minutes) vers l’observateur.
+   */
+  light_time_minutes?: number;
+
+  /**
+   * Élongation Soleil-Observateur-Objet (degrés).
+   */
+  solar_elongation_deg?: number;
+
+  /**
+   * Angle de phase (Soleil-Objet-Observateur), degrés.
+   */
+  phase_angle_deg?: number;
+
+  /**
+   * Fraction éclairée (0–1).
+   */
+  illumination_fraction?: number;
+
+  /**
+   * Magnitude apparente (si disponible).
+   */
+  apparent_magnitude?: number;
 }
 
 /**

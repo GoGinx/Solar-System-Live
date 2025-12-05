@@ -3,7 +3,9 @@
   "private": true,
   "scripts": {
     "dev": "npm --prefix server run dev & npm --prefix client run start",
+    "dev:single": "npm --prefix client run build -- --watch & CLIENT_DIST=client/dist/solar-system-real-client npm --prefix server run dev",
     "build": "npm --prefix server run build && npm --prefix client run build",
+    "start": "CLIENT_DIST=client/dist/solar-system-real-client npm --prefix server run start",
     "install:all": "npm --prefix server install && npm --prefix client install"
   }
 }

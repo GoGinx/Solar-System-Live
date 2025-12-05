@@ -299,13 +299,14 @@
     <app-planet-info-panel
       *ngIf="selectedPlanet"
       [planet]="selectedPlanet"
+      [ephemeris]="selectedEphemeris"
       (close)="onCloseInfo()"
     ></app-planet-info-panel>
 
     <div class="placeholder" *ngIf="!selectedPlanet">
       <p>
-        Cliquez sur une planète dans la vue pour afficher ses caractéristiques
-        physiques et orbitales.
+        Cliquez sur une planète dans la vue pour afficher ses données
+        d’éphémérides temps réel (NASA JPL Horizons).
       </p>
     </div>
 
@@ -374,9 +375,6 @@
           <div class="voyager-card-header">
             <div class="voyager-name">{{ v.name }}</div>
             <div class="voyager-id">Horizons ID : {{ v.horizonsId }}</div>
-            <div class="since-launch" *ngIf="v.sinceLaunchLabel">
-              Depuis le lancement : {{ v.sinceLaunchLabel }}
-            </div>
           </div>
           <div class="voyager-meta">
             <span *ngIf="v.referenceFrame">Repère : {{ v.referenceFrame }}</span>
@@ -464,19 +462,6 @@
               <svg viewBox="0 0 100 30" preserveAspectRatio="none">
                 <path [attr.d]="v.spark7dPath" />
               </svg>
-            </div>
-          </div>
-          <div class="voyager-milestones" *ngIf="v.milestones?.length">
-            <div class="milestone-title">Jalons</div>
-            <div class="milestone-list">
-              <div class="milestone-item" *ngFor="let m of v.milestones">
-                <span class="dot"></span>
-                <span class="label">{{ m.label }}</span>
-                <span class="since">{{ m.since }}</span>
-              </div>
-            </div>
-            <div class="since-launch" *ngIf="v.distanceSinceLaunchKm !== null">
-              Distance franchie ~ {{ v.distanceSinceLaunchKm | number:'1.0-0' }} km
             </div>
           </div>
         </div>

@@ -52,32 +52,9 @@ interface VoyagerView extends VoyagerData {
   lightTime: Required<NonNullable<VoyagerData['lightTime']>>;
   trajectory: NonNullable<VoyagerData['trajectory']>;
   communication?: DsnContact | null;
-  sinceLaunchLabel?: string;
-  distanceSinceLaunchKm?: number | null;
-  milestones?: { label: string; date: string; since: string }[];
   spark24hPath?: string | null;
   spark7dPath?: string | null;
 }
-
-const VOYAGER_MISSION = {
-  voyager1: {
-    launch: '1977-09-05T12:56:00Z',
-    events: [
-      { label: 'Jupiter (survol)', date: '1979-03-05T00:00:00Z' },
-      { label: 'Saturne (survol)', date: '1980-11-12T00:00:00Z' },
-      { label: 'Héliopause', date: '2012-08-25T00:00:00Z' }
-    ]
-  },
-  voyager2: {
-    launch: '1977-08-20T14:29:00Z',
-    events: [
-      { label: 'Jupiter (survol)', date: '1979-07-09T00:00:00Z' },
-      { label: 'Saturne (survol)', date: '1981-08-26T00:00:00Z' },
-      { label: 'Uranus (survol)', date: '1986-01-24T00:00:00Z' },
-      { label: 'Neptune (survol)', date: '1989-08-25T00:00:00Z' }
-    ]
-  }
-} as const;
 
 const MS_PER_DAY = 86_400_000;
 const KM_PER_AU = 149_597_870.7;
@@ -103,6 +80,7 @@ export class SolarSystemComponent implements OnInit, OnDestroy {
    * Planète actuellement sélectionnée (pour affichage dans PlanetInfoPanel).
    */
   selectedPlanet: Planet | null = null;
+  selectedEphemeris: PlanetPosition | null = null;
 
   /**
    * Données projetées sur l’écran (positions en pixels) dérivées
@@ -281,6 +259,7 @@ export class SolarSystemComponent implements OnInit, OnDestroy {
     this.trackCache(snapshot);
     this.updateDisplayFromSnapshot(snapshot);
     this.startInertialAnimation();
+    this.refreshSelectedEphemeris();
     this.enrichVoyagerViews();
   }
 
@@ -860,10 +839,6 @@ export class SolarSystemComponent implements OnInit, OnDestroy {
     const lightTime = this.computeLightTime(v, earthDistanceKm);
     const trajectory = v.trajectory ?? this.computeTrajectoryFromVector(v);
     const communication = this.findDsnContact(v);
-    const mission = VOYAGER_MISSION[v.id];
-    const milestones = this.buildMilestones(mission?.events ?? []);
-    const sinceLaunchLabel = mission ? this.formatDurationSince(mission.launch) : undefined;
-    const distanceSinceLaunchKm = earthDistanceKm ?? v.distanceFromEarth?.km ?? v.distanceFromSun.km ?? null;
 
     const distanceForTrend = distanceFromEarth.km ?? v.distanceFromSun.km ?? null;
     const speedKmS = v.speed.kmPerS ?? null;
@@ -876,9 +851,6 @@ export class SolarSystemComponent implements OnInit, OnDestroy {
       lightTime,
       trajectory,
       communication,
-      sinceLaunchLabel,
-      distanceSinceLaunchKm,
-      milestones,
       spark24hPath,
       spark7dPath
     };
@@ -990,32 +962,6 @@ export class SolarSystemComponent implements OnInit, OnDestroy {
         c.spacecraftId === (v.id === 'voyager1' ? '31' : '32')
     );
     return match ?? null;
-  }
-
-  private buildMilestones(events: ReadonlyArray<{ label: string; date: string }>): { label: string; date: string; since: string }[] {
-    return events.map((e) => ({
-      ...e,
-      since: this.formatDurationSince(e.date)
-    }));
-  }
-
-  private formatDurationSince(dateIso: string): string {
-    const ts = Date.parse(dateIso);
-    if (!Number.isFinite(ts)) {
-      return '';
-    }
-    const diffMs = Date.now() - ts;
-    const years = Math.floor(diffMs / (MS_PER_DAY * 365.25));
-    const days = Math.floor((diffMs - years * MS_PER_DAY * 365.25) / MS_PER_DAY);
-    if (years > 0) {
-      return `${years} an${years > 1 ? 's' : ''}${days > 0 ? ` ${days} j` : ''}`;
-    }
-    const hours = Math.floor((diffMs - days * MS_PER_DAY) / 3_600_000);
-    if (days > 0) {
-      return `${days} j ${hours} h`;
-    }
-    const minutes = Math.floor((diffMs - hours * 3_600_000) / 60_000);
-    return `${hours} h ${minutes} min`;
   }
 
   private buildSparklinePath(distanceKm: number | null, speedKmS: number | null, horizonHours: number): string | null {
@@ -1237,6 +1183,7 @@ export class SolarSystemComponent implements OnInit, OnDestroy {
   onPlanetClick(planet: Planet): void {
     this.selectedPlanet = planet;
     this.updateSelectionFlags(planet);
+    this.refreshSelectedEphemeris();
   }
 
   /**
@@ -1244,6 +1191,7 @@ export class SolarSystemComponent implements OnInit, OnDestroy {
    */
   onCloseInfo(): void {
     this.selectedPlanet = null;
+    this.selectedEphemeris = null;
 
     // Nettoie le flag de sélection visuelle
     this.updateSelectionFlags(null);
@@ -1296,6 +1244,7 @@ export class SolarSystemComponent implements OnInit, OnDestroy {
     this.selectedPlanet = planet;
     this.focusPlanetName = planet.name;
     this.updateSelectionFlags(planet);
+    this.refreshSelectedEphemeris();
     this.refreshDisplay();
   }
 
@@ -1318,6 +1267,20 @@ export class SolarSystemComponent implements OnInit, OnDestroy {
       ...dp,
       isSelected: !!planet && dp.planet.name === planet.name
     }));
+  }
+
+  /**
+   * Récupère l’éphéméride associée à la planète sélectionnée.
+   */
+  private refreshSelectedEphemeris(): void {
+    if (!this.selectedPlanet || !this.lastSnapshot) {
+      this.selectedEphemeris = null;
+      return;
+    }
+    const ephem = this.lastSnapshot.bodies.find(
+      (b) => b.name === this.selectedPlanet?.name
+    );
+    this.selectedEphemeris = ephem ?? null;
   }
 
   /**

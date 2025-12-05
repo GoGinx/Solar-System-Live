@@ -10,8 +10,11 @@ const metrics_1 = require("./observability/metrics");
 const logger_1 = require("./observability/logger");
 const requestTracing_1 = require("./observability/requestTracing");
 const voyagers_1 = __importDefault(require("./routes/voyagers"));
+const path_1 = __importDefault(require("path"));
+const fs_1 = __importDefault(require("fs"));
 const app = (0, express_1.default)();
 const port = process.env.PORT || 3000;
+const clientDist = process.env.CLIENT_DIST || path_1.default.resolve(__dirname, '..', 'client', 'dist', 'solar-system-real-client');
 app.use((0, requestTracing_1.applyRequestTracing)());
 app.use((0, cors_1.default)());
 app.use(express_1.default.json());
@@ -30,6 +33,16 @@ app.get('/metrics', async (_req, res) => {
         res.status(500).send(`# Metrics error: ${err?.message ?? String(err)}`);
     }
 });
+// Sert le front Angular buildé si le dossier existe (un seul serveur pour front+API).
+if (fs_1.default.existsSync(clientDist)) {
+    app.use(express_1.default.static(clientDist));
+    app.get('*', (_req, res) => {
+        res.sendFile(path_1.default.join(clientDist, 'index.html'));
+    });
+}
+else {
+    (0, logger_1.logInfo)('client_dist_missing', { clientDist });
+}
 app.listen(port, () => {
     (0, logger_1.logInfo)('api_server_started', { port });
 });

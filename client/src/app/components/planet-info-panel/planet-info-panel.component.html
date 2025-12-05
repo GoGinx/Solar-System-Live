@@ -19,130 +19,79 @@
     <div class="panel-title-row">
       <h2>{{ planet.displayName }}</h2>
 
-      <!-- Tag type de planète (simplifié par nom) -->
-      <span
-        class="planet-type-chip"
-        *ngIf="
-          planet.name === 'mercury' ||
-          planet.name === 'venus' ||
-          planet.name === 'earth' ||
-          planet.name === 'mars'
-        "
-      >
-        Planète tellurique
-      </span>
-
-      <span
-        class="planet-type-chip"
-        *ngIf="planet.name === 'jupiter' || planet.name === 'saturn'"
-      >
-        Géante gazeuse
-      </span>
-
-      <span
-        class="planet-type-chip"
-        *ngIf="planet.name === 'uranus' || planet.name === 'neptune'"
-      >
-        Géante de glace
-      </span>
-
-      <span
-        class="planet-type-chip"
-        *ngIf="planet.name === 'pluto'"
-      >
-        Planète naine
-      </span>
+      <span class="planet-type-chip">{{ planetTypeLabel }}</span>
     </div>
 
-    <div class="panel-subtitle">
-      {{ planet.name | uppercase }} · Système solaire
+    <div class="panel-subtitle" *ngIf="ephemeris">
+      Éphémérides NASA JPL Horizons · {{ ephemeris.timestamp || 'maintenant' }}
     </div>
   </header>
 
   <!-- Corps : description + caractéristiques -->
   <section class="panel-body">
-    <!-- Résumé / description courte -->
-    <p class="planet-summary">
-      {{ planet.info }}
-    </p>
+    <section class="planet-section" aria-label="Données temps réel">
+      <h3>Données temps réel</h3>
 
-    <!-- Caractéristiques physiques -->
-    <section
-      class="planet-section planet-physical"
-      aria-label="Caractéristiques physiques"
-    >
-      <h3>Caractéristiques physiques</h3>
+      <ng-container *ngIf="ephemeris; else noData">
+        <ul>
+          <li>
+            <span>Distance héliocentrique</span>
+            <span>
+              {{ heliocentricDistanceAu | number: '1.3-3' }} UA
+              <ng-container *ngIf="heliocentricDistanceKm">· {{ heliocentricDistanceKm | number: '1.0-0' }} km</ng-container>
+            </span>
+          </li>
+          <li *ngIf="rangeAu !== null">
+            <span>Distance à la Terre</span>
+            <span>{{ rangeAu | number: '1.3-3' }} UA · {{ rangeKm | number: '1.0-0' }} km</span>
+          </li>
+          <li *ngIf="lightTimeMin !== null">
+            <span>Temps lumière (aller)</span>
+            <span>{{ lightTimeMin | number: '1.1-1' }} min</span>
+          </li>
+          <li *ngIf="solarElongationDeg !== null">
+            <span>Élongation Soleil-Obs-Obj</span>
+            <span>{{ solarElongationDeg | number: '1.1-1' }}°</span>
+          </li>
+          <li *ngIf="phaseAngleDeg !== null">
+            <span>Angle de phase</span>
+            <span>{{ phaseAngleDeg | number: '1.1-1' }}°</span>
+          </li>
+          <li *ngIf="illuminationFraction !== null">
+            <span>Fraction éclairée</span>
+            <span>{{ illuminationFraction | percent: '1.0-1' }}</span>
+          </li>
+          <li *ngIf="apparentMagnitude !== null">
+            <span>Magnitude apparente</span>
+            <span>{{ apparentMagnitude | number: '1.1-2' }}</span>
+          </li>
+          <li *ngIf="speedAuPerDay !== null">
+            <span>Vitesse</span>
+            <span>{{ speedAuPerDay | number: '1.3-3' }} UA/j · {{ speedKmPerS | number: '1.2-2' }} km/s</span>
+          </li>
+          <li>
+            <span>Coordonnées (UA)</span>
+            <span>
+              x={{ ephemeris.x_au | number: '1.3-3' }},
+              y={{ ephemeris.y_au | number: '1.3-3' }},
+              z={{ ephemeris.z_au | number: '1.3-3' }}
+            </span>
+          </li>
+        </ul>
+      </ng-container>
 
-      <ul>
-        <li>
-          <span>Rayon moyen</span>
-          <span>{{ planet.radiusKm | number }} km</span>
-        </li>
-
-        <li>
-          <span>Rayon relatif à la Terre</span>
-          <!-- 6371 km ~ rayon moyen Terre -->
-          <span>
-            ≈ {{ (planet.radiusKm / 6371) | number: '1.2-2' }} R⊕
-          </span>
-        </li>
-
-        <li>
-          <span>Masse</span>
-          <span>{{ planet.massKg | number: '1.0-2' }} kg</span>
-        </li>
-
-        <li>
-          <span>Masse relative à la Terre</span>
-          <!-- 5.97237e24 kg ~ masse Terre -->
-          <span>
-            ≈ {{ (planet.massKg / 5.97237e24) | number: '1.2-2' }} M⊕
-          </span>
-        </li>
-      </ul>
-    </section>
-
-    <!-- Paramètres orbitaux (valeurs dérivées simples) -->
-    <section
-      class="planet-section planet-orbital"
-      aria-label="Paramètres orbitaux moyens"
-    >
-      <h3>Paramètres orbitaux (moyens)</h3>
-
-      <ul>
-        <li>
-          <span>Demi-grand axe</span>
-          <span>{{ planet.semiMajorAxisAU | number: '1.3-3' }} UA</span>
-        </li>
-
-        <li>
-          <span>Distance moyenne au Soleil</span>
-          <!-- 1 UA ≈ 149 597 870.7 km -->
-          <span>
-            ≈
-            {{
-              (planet.semiMajorAxisAU * 149597870.7) | number: '1.0-0'
-            }}
-            km
-          </span>
-        </li>
-
-        <li>
-          <span>Position affichée</span>
-          <span>
-            Basée sur des éphémérides temps réel (backend NASA JPL Horizons)
-          </span>
-        </li>
-      </ul>
+      <ng-template #noData>
+        <p class="planet-summary">
+          Aucune donnée temps réel disponible pour l’instant.
+        </p>
+      </ng-template>
     </section>
   </section>
 
   <!-- Pied de carte : note / source -->
   <footer class="panel-footer">
     <p>
-      Les valeurs ci-dessus sont des ordres de grandeur physiques moyens.
-      Les positions à l’écran sont calculées à partir de données
-      d’éphémérides en temps réel, et non d’une simulation locale.
+      Affichage 100% éphémérides temps réel (NASA JPL Horizons). Aucune donnée statique locale.
     </p>
   </footer>
 </div>

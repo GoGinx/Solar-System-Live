@@ -8,9 +8,11 @@
   NODE_VERSION = "18"
 
 [dev]
-  # Pour `netlify dev`: on utilise la commande racine qui lance API + client.
-  command = "npm run dev"
-  targetPort = 4200
+  # Pour `netlify dev`: un seul serveur (build front + API Express qui sert le dist).
+  command = "npm run dev:single"
+  # Port d'écoute de Netlify Dev (proxy local) et port cible du serveur API/front.
+  port = 4200
+  targetPort = 3000
   framework = "#custom"
   publish = "client/dist/solar-system-real-client"
 
