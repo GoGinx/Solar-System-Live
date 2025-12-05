@@ -29,7 +29,9 @@ function formatUtcDate(d: Date): string {
   const day = pad(d.getUTCDate());
   const hour = pad(d.getUTCHours());
   const minute = pad(d.getUTCMinutes());
-  return `${year}-${month}-${day} ${hour}:${minute}`;
+  // Horizons API 1.2 n'accepte plus l'espace entre date et heure (considéré
+  // comme deux constantes) : utiliser un séparateur "T" façon ISO-8601.
+  return `${year}-${month}-${day}T${hour}:${minute}`;
 }
 
 export async function fetchPlanetStateVector(
@@ -57,7 +59,8 @@ export async function fetchPlanetStateVector(
     STEP_SIZE: '1d', // nouvelle API tolère "1d" ("1 d" provoque une erreur)
     OUT_UNITS: 'AU-D',
     VEC_TABLE: '2',
-    CSV_FORMAT: 'TEXT'
+    // La V1.2 refuse "TEXT" : CSV_FORMAT doit être un booléen.
+    CSV_FORMAT: 'YES'
   };
 
   const parseVectorFromResult = (resultText: string): PlanetStateVector => {
