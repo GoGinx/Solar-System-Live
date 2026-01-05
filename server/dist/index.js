@@ -10,6 +10,7 @@ const metrics_1 = require("./observability/metrics");
 const logger_1 = require("./observability/logger");
 const requestTracing_1 = require("./observability/requestTracing");
 const voyagers_1 = __importDefault(require("./routes/voyagers"));
+const catalog_1 = __importDefault(require("./routes/catalog"));
 const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
 const app = (0, express_1.default)();
@@ -20,6 +21,7 @@ app.use((0, cors_1.default)());
 app.use(express_1.default.json());
 app.use('/api/ephemeris', ephemeris_1.default);
 app.use('/api/voyagers', voyagers_1.default);
+app.use('/api/catalog', catalog_1.default);
 app.get('/', (_req, res) => {
     res.send('Solar System Real – API JPL Horizons');
 });

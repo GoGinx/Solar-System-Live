@@ -1,1031 +1,247 @@
 :host {
   display: block;
-  /* Variables de thème locales au composant */
-  --bg-page: #050510;
-  --bg-panel: #050510;
-  --bg-svg: radial-gradient(circle at center, #000015 0%, #000000 65%, #020208 100%);
-
-  --border-soft: rgba(255, 255, 255, 0.06);
-  --border-strong: rgba(255, 255, 255, 0.15);
-
-  --text-main: #f5f5ff;
-  --text-muted: #b7bbdd;
-  --text-soft: #8a8fb8;
-
-  --accent: #3b82f6;
-  --accent-soft: rgba(59, 130, 246, 0.24);
-  --accent-subtle: rgba(59, 130, 246, 0.1);
-
-  --orbit-color: rgba(255, 255, 255, 0.12);
-  --planet-stroke: rgba(255, 255, 255, 0.9);
-
-  --shadow-strong: 0 18px 60px rgba(0, 0, 0, 0.9);
-  --shadow-soft: 0 0 0 1px rgba(255, 255, 255, 0.02);
-
-  --radius-lg: 14px;
-  --radius-md: 10px;
-  --radius-sm: 6px;
-
-  --transition-fast: 140ms ease-out;
-  --transition-med: 200ms ease;
-
-  color: var(--text-main);
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: radial-gradient(circle at 50% 40%, #060a22 0%, #03040c 45%, #000000 100%);
+  color: #eaf0ff;
 }
 
-/* Animations de base */
-@keyframes solar-fade-in {
-  0% {
-    opacity: 0;
-    transform: translateY(6px) scale(0.98);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-@keyframes planet-pulse {
-  0% {
-    transform: scale(1);
-    filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.3));
-  }
-  50% {
-    transform: scale(1.04);
-    filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.7));
-  }
-  100% {
-    transform: scale(1);
-    filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.3));
-  }
-}
-
-/* Layout principal */
-.solar-system-layout {
-  display: flex;
-  flex-direction: row;
-  gap: 24px;
-  width: 100%;
-  box-sizing: border-box;
-  background: transparent;
-}
-
-/* Colonne gauche : commandes + SVG + échelle */
-.left-pane {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.controls-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.status-banner {
-  border-radius: var(--radius-md);
-  padding: 12px 14px;
-  border: 1px solid var(--border-soft);
-  background: rgba(255, 255, 255, 0.04);
-  box-shadow: var(--shadow-soft);
-  line-height: 1.35;
-}
-
-.status-banner .status-title {
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  margin-bottom: 4px;
-}
-
-.status-banner.frozen {
-  border-color: rgba(59, 130, 246, 0.35);
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.18), rgba(59, 130, 246, 0.06));
-}
-
-.status-banner.error {
-  border-color: rgba(255, 99, 99, 0.35);
-  background: linear-gradient(135deg, rgba(255, 99, 99, 0.16), rgba(255, 99, 99, 0.06));
-}
-
-.voyager-panel {
-  margin-top: 16px;
-  padding: 14px;
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius-lg);
-  background: rgba(255, 255, 255, 0.02);
-  box-shadow: var(--shadow-soft);
-}
-
-.panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
-  gap: 8px;
-}
-
-.panel-title {
-  font-size: 16px;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-}
-
-.panel-subtitle {
-  color: var(--text-soft);
-  font-size: 12px;
-}
-
-.panel-actions {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.voyager-cards {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.voyager-card {
-  padding: 12px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-soft);
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.voyager-card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 12px;
-  margin-bottom: 4px;
-}
-
-.voyager-name {
-  font-weight: 700;
-}
-
-.voyager-id {
-  color: var(--text-soft);
-  font-size: 12px;
-}
-
-.voyager-meta {
-  color: var(--text-soft);
-  font-size: 12px;
-  display: flex;
-  gap: 12px;
-  margin-bottom: 8px;
-}
-
-.voyager-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.voyager-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  align-items: baseline;
-}
-
-.voyager-row .label {
-  color: var(--text-soft);
-  font-size: 12px;
-  min-width: 120px;
-}
-
-.voyager-row .value {
-  font-weight: 600;
-}
-
-.voyager-row .value.mono {
-  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
-  font-size: 12px;
-}
-
-.voyager-row .value .muted {
-  color: var(--text-soft);
-  font-weight: 400;
-}
-
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 2px 8px;
-  margin-left: 6px;
-  border-radius: 999px;
-  background: var(--accent-soft);
-  color: var(--text-main);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.chip.subtle {
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--text-muted);
-}
-
-.since-launch {
-  color: var(--text-soft);
-  font-size: 12px;
-  text-align: right;
-}
-
-.trajectory span {
-  display: inline-flex;
-  align-items: center;
-}
-
-.comm-row .value {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.comm-line {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 10px;
-  align-items: center;
-}
-
-.sparkline-block {
-  display: flex;
-  gap: 12px;
-  margin-top: 10px;
-}
-
-.sparkline {
-  flex: 1 1 0;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius-sm);
-  padding: 6px;
-}
-
-.spark-label {
-  font-size: 12px;
-  color: var(--text-soft);
-  margin-bottom: 4px;
-}
-
-.sparkline svg {
-  width: 100%;
-  height: 32px;
-}
-
-.sparkline path {
-  fill: none;
-  stroke: var(--accent);
-  stroke-width: 1.5;
-}
-
-.voyager-milestones {
-  margin-top: 10px;
-  padding-top: 8px;
-  border-top: 1px solid var(--border-soft);
-}
-
-.milestone-title {
-  font-size: 12px;
-  color: var(--text-soft);
-  margin-bottom: 4px;
-}
-
-.milestone-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.milestone-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-}
-
-.milestone-item .dot {
-  width: 6px;
-  height: 6px;
-  background: var(--accent);
-  border-radius: 50%;
-}
-
-.milestone-item .since {
-  color: var(--text-soft);
-  margin-left: auto;
-}
-
-.badge {
-  margin-top: 4px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 8px;
-  border-radius: 999px;
-  border: 1px solid var(--border-soft);
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--text-soft);
-  font-size: 12px;
-}
-
-.voyager-compare {
-  margin: 10px 0;
-  padding: 10px;
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.02);
-}
-
-.compare-title {
-  font-weight: 700;
-  margin-bottom: 6px;
-}
-
-.compare-table {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 4px;
-}
-
-.compare-row {
-  display: contents;
-}
-
-.compare-row .cell {
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--border-soft);
-  font-size: 13px;
-}
-
-.compare-row.head .cell {
-  font-weight: 700;
-  color: var(--text-soft);
-  border-bottom-color: rgba(255, 255, 255, 0.12);
-}
-
-.compare-row .cell.label {
-  color: var(--text-soft);
-  font-weight: 600;
-}
-
-/* Colonne droite : panneau d’info */
-.right-pane {
-  flex: 0 0 auto;
-  min-width: 260px;
-  max-width: 360px;
-}
-
-.selected-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.selected-actions button {
-  padding: 6px 12px;
-  border-radius: var(--radius-md);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: var(--accent);
-  color: #fff;
-  cursor: pointer;
-  box-shadow: 0 8px 20px rgba(59, 130, 246, 0.35);
-  transition: transform 0.1s ease, box-shadow 0.2s ease;
-}
-
-.selected-actions button:hover {
-  transform: translateY(-1px);
-}
-
-.selected-actions button:active {
-  transform: translateY(0);
-  box-shadow: none;
-}
-
-.selected-actions button.ghost {
-  background: transparent;
-  color: var(--text-soft);
-  border-style: dashed;
-  box-shadow: none;
-}
-
-.selected-actions button.ghost:hover {
-  color: var(--text-main);
-  border-color: rgba(255, 255, 255, 0.35);
-}
-
-/* ------------------------------------------------------------------------- */
-/* Contrôles (Switch 2D / 3D)                                               */
-/* ------------------------------------------------------------------------- */
-
-.controls {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px;
-  border-radius: 999px;
-  background: rgba(10, 10, 30, 0.9);
-  box-shadow:
-    0 10px 30px rgba(0, 0, 0, 0.7),
-    0 0 0 1px rgba(255, 255, 255, 0.06);
-  backdrop-filter: blur(10px);
-  width: fit-content;
-  animation: solar-fade-in 180ms ease-out;
-}
-
-.controls button {
+.space-stage {
   position: relative;
-  padding: 6px 14px;
-  border-radius: 999px;
-  border: none;
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 13px;
-  line-height: 1;
-  cursor: pointer;
-  white-space: nowrap;
-  transition:
-    background-color var(--transition-fast),
-    color var(--transition-fast),
-    box-shadow var(--transition-fast),
-    transform 0.08s ease-out;
+  width: 100%;
+  height: 100%;
 }
 
-.controls button::before {
+/* Fond futuriste (etoiles + grille + scanlines) */
+.space-stage::before {
   content: "";
   position: absolute;
   inset: 0;
-  border-radius: inherit;
-  background: radial-gradient(circle at top, rgba(255, 255, 255, 0.16), transparent);
-  opacity: 0;
-  transition: opacity var(--transition-fast);
   pointer-events: none;
+  background:
+    radial-gradient(circle at 20% 30%, rgba(88, 101, 242, 0.08), transparent 45%),
+    radial-gradient(circle at 70% 60%, rgba(0, 255, 240, 0.05), transparent 42%),
+    radial-gradient(circle at 40% 80%, rgba(255, 0, 128, 0.04), transparent 50%),
+    radial-gradient(circle at 12% 18%, rgba(255, 255, 255, 0.22) 0 1px, transparent 2px),
+    radial-gradient(circle at 33% 72%, rgba(255, 255, 255, 0.18) 0 1px, transparent 2px),
+    radial-gradient(circle at 82% 35%, rgba(255, 255, 255, 0.16) 0 1px, transparent 2px),
+    radial-gradient(circle at 58% 18%, rgba(255, 255, 255, 0.14) 0 1px, transparent 2px),
+    radial-gradient(circle at 66% 88%, rgba(255, 255, 255, 0.12) 0 1px, transparent 2px);
+  filter: blur(0.2px);
+  opacity: 0.95;
 }
 
-.controls button:hover {
-  color: var(--text-main);
-  background: rgba(255, 255, 255, 0.04);
+.space-stage::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      rgba(255, 255, 255, 0.02) 0px,
+      rgba(255, 255, 255, 0.02) 1px,
+      rgba(0, 0, 0, 0) 3px,
+      rgba(0, 0, 0, 0) 6px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(0, 255, 240, 0.035) 0px,
+      rgba(0, 255, 240, 0.035) 1px,
+      rgba(0, 0, 0, 0) 60px,
+      rgba(0, 0, 0, 0) 120px
+    );
+  mix-blend-mode: screen;
+  opacity: 0.35;
 }
-
-.controls button:hover::before {
-  opacity: 0.6;
-}
-
-.controls button:active {
-  transform: translateY(1px) scale(0.99);
-  box-shadow: none;
-}
-
-.controls button.active {
-  color: #ffffff;
-  background: var(--accent);
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.18),
-    0 10px 25px rgba(59, 130, 246, 0.45);
-}
-
-.controls button:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-/* ------------------------------------------------------------------------- */
-/* Timelapse                                                                 */
-/* ------------------------------------------------------------------------- */
-
-.timelapse-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px 12px;
-  border-radius: var(--radius-md);
-  background: rgba(10, 10, 30, 0.75);
-  box-shadow:
-    0 10px 30px rgba(0, 0, 0, 0.55),
-    0 0 0 1px rgba(255, 255, 255, 0.05);
-}
-
-.timelapse-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.timelapse-label {
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  color: var(--text-main);
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.timelapse-label .tag {
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--text-soft);
-  font-size: 11px;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-
-.timelapse-buttons {
-  display: inline-flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.timelapse-buttons button {
-  padding: 5px 10px;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--text-muted);
-  cursor: pointer;
-  transition:
-    background var(--transition-fast),
-    color var(--transition-fast),
-    transform 0.08s ease-out,
-    box-shadow var(--transition-fast);
-}
-
-.timelapse-buttons button:hover {
-  color: var(--text-main);
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.timelapse-buttons button.active {
-  color: #ffffff;
-  background: var(--accent);
-  border-color: rgba(255, 255, 255, 0.18);
-  box-shadow: 0 8px 20px rgba(59, 130, 246, 0.35);
-}
-
-.timelapse-buttons button.ghost {
-  background: transparent;
-  border-style: dashed;
-}
-
-.timelapse-slider {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.timelapse-slider input[type="range"] {
-  width: 100%;
-  accent-color: var(--accent);
-}
-
-.timelapse-values {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-  font-size: 12px;
-  color: var(--text-soft);
-}
-
-.inertial-toggle {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 8px 10px;
-  margin-top: 2px;
-  border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px dashed rgba(255, 255, 255, 0.05);
-  color: var(--text-soft);
-  font-size: 12px;
-}
-
-.inertial-toggle label {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--text-main);
-  font-weight: 600;
-}
-
-.inertial-toggle input {
-  accent-color: var(--accent);
-}
-
-.inertial-hint {
-  font-size: 11px;
-  color: var(--text-soft);
-}
-
-.view-toggles {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  font-size: 12px;
-  color: var(--text-soft);
-}
-
-.view-toggles input {
-  accent-color: var(--accent);
-}
-
-/* ------------------------------------------------------------------------- */
-/* Qualité des données / légende                                            */
-/* ------------------------------------------------------------------------- */
-
-.data-quality {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 6px;
-  padding: 10px 12px;
-  border-radius: var(--radius-md);
-  background: rgba(5, 10, 25, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  color: var(--text-soft);
-  font-size: 12px;
-}
-
-.color-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  font-size: 12px;
-  color: var(--text-soft);
-}
-
-.legend-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: inherit;
-  cursor: pointer;
-  appearance: none;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  transition:
-    border-color var(--transition-fast),
-    transform 80ms ease-out,
-    background var(--transition-fast),
-    box-shadow var(--transition-fast);
-}
-
-.legend-item:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--text-main);
-  border-color: rgba(255, 255, 255, 0.16);
-}
-
-.legend-item:active {
-  transform: translateY(1px);
-}
-
-.legend-item.active {
-  color: #fff;
-  background: rgba(59, 130, 246, 0.25);
-  border-color: rgba(59, 130, 246, 0.6);
-  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.35);
-}
-
-.legend-item:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-.legend-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  display: inline-block;
-}
-
-.focus-status {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: var(--radius-md);
-  background: linear-gradient(90deg, rgba(59, 130, 246, 0.16), rgba(59, 130, 246, 0.05));
-  border: 1px solid rgba(59, 130, 246, 0.25);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
-}
-
-.focus-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 600;
-  color: var(--text-main);
-}
-
-.focus-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 999px;
-  box-shadow: 0 0 12px rgba(255, 255, 255, 0.4);
-}
-
-.focus-status .ghost {
-  padding: 6px 10px;
-  border-radius: var(--radius-sm);
-  border: 1px dashed rgba(255, 255, 255, 0.35);
-  background: transparent;
-  color: #ffffff;
-  cursor: pointer;
-  transition: border-color var(--transition-fast), color var(--transition-fast), transform 0.08s ease-out;
-}
-
-.focus-status .ghost:hover {
-  color: var(--accent);
-  border-color: rgba(59, 130, 246, 0.6);
-}
-
-/* ------------------------------------------------------------------------- */
-/* Zone SVG – Système solaire                                               */
-/* ------------------------------------------------------------------------- */
 
 .solar-system-svg {
-  display: block;
   width: 100%;
-  max-width: 800px;
-  aspect-ratio: 1 / 1;
-  height: auto;
-
-  background: var(--bg-svg);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border-soft);
-  box-shadow: var(--shadow-strong), var(--shadow-soft);
-
-  animation: solar-fade-in 220ms ease-out;
+  height: 100%;
+  display: block;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
-/* Groupe des orbites */
+.sun {
+  filter: drop-shadow(0 0 18px rgba(255, 204, 51, 0.75));
+}
+
+.sun-core {
+  pointer-events: none;
+  filter: drop-shadow(0 0 12px rgba(255, 204, 51, 0.85));
+}
+
+.sun-clickable {
+  cursor: pointer;
+}
+
+.sun-clickable:hover {
+  filter:
+    drop-shadow(0 0 18px rgba(255, 204, 51, 0.78))
+    drop-shadow(0 0 28px rgba(255, 204, 51, 0.35));
+}
+
 .orbits {
   pointer-events: none;
 }
 
-.orbit-circle {
-  fill: none;
-  stroke: var(--orbit-color);
-  stroke-width: 1;
-  stroke-dasharray: 2 4;
-  transition: stroke var(--transition-med), stroke-width var(--transition-med);
-}
-
-/* Plans orbitaux (vue 3D) */
-.orbit-planes {
+.sunlight {
   pointer-events: none;
 }
 
-.orbit-plane {
-  fill: rgba(59, 130, 246, 0.06);
-  stroke: rgba(255, 255, 255, 0.04);
-  stroke-width: 1;
-  filter: blur(0.4px);
+.sun-ray {
+  stroke: rgba(255, 204, 51, 0.25);
+  stroke-width: 1.2;
+  stroke-dasharray: 4 7;
+  filter:
+    drop-shadow(0 0 10px rgba(255, 204, 51, 0.22))
+    drop-shadow(0 0 22px rgba(0, 255, 240, 0.08));
+  opacity: 0.9;
 }
 
-/* Groupe des planètes */
+.orbit-circle {
+  fill: none;
+  stroke: rgba(0, 255, 240, 0.12);
+  stroke-width: 1;
+  stroke-dasharray: 2 6;
+  filter: drop-shadow(0 0 6px rgba(0, 255, 240, 0.12));
+}
+
 .planets {
   cursor: default;
 }
 
-/* Planètes cliquables */
+.planet-group {
+  cursor: pointer;
+  transition: transform 120ms ease-out;
+  transform-origin: center center;
+  transform-box: fill-box;
+}
+
+.planet-group:hover {
+  transform: scale(1.08);
+}
+
+.planet-group.selected {
+  transform: scale(var(--selected-planet-scale, 2.1));
+}
+
+.planet-group.selected:hover {
+  transform: scale(calc(var(--selected-planet-scale, 2.1) + 0.1));
+}
+
 .planet-circle {
   cursor: pointer;
-  stroke: var(--planet-stroke);
-  stroke-width: 0.5;
-  transition:
-    transform var(--transition-fast),
-    stroke-width var(--transition-fast),
-    filter var(--transition-fast);
+  stroke: rgba(255, 255, 255, 0.85);
+  stroke-width: 0.6;
+  transition: filter 120ms ease-out, stroke-width 120ms ease-out;
   transform-origin: center center;
 }
 
-.planet-circle:hover {
+.planet-group:hover .planet-circle {
   stroke-width: 1.1;
-  filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.8));
-  transform: scale(1.05);
+  filter: drop-shadow(0 0 10px rgba(0, 255, 240, 0.45));
 }
 
-.planet-circle:active {
-  transform: scale(0.98);
+.planet-group.selected .planet-circle {
+  stroke-width: 1.6;
+  filter:
+    drop-shadow(0 0 10px rgba(0, 255, 240, 0.55))
+    drop-shadow(0 0 22px rgba(88, 101, 242, 0.35));
 }
 
-/* Au besoin, classe pour surligner la planète sélectionnée (si tu l’ajoutes côté TS) */
-.planet-circle.selected {
-  animation: planet-pulse 1200ms ease-in-out infinite;
+.planet-texture {
+  pointer-events: none;
+  opacity: 0.5;
+  mix-blend-mode: soft-light;
+  filter: saturate(0.98) contrast(0.98);
 }
 
-.planet-circle.focused {
-  stroke-width: 2;
-  filter: drop-shadow(0 0 8px rgba(250, 204, 21, 0.85));
+.planet-texture[data-planet='mercury'],
+.planet-texture[data-planet='venus'],
+.planet-texture[data-planet='earth'],
+.planet-texture[data-planet='mars'],
+.planet-texture[data-planet='pluto'] {
+  opacity: 0.62;
+  mix-blend-mode: soft-light;
+  filter: saturate(1) contrast(1);
 }
 
-/* Ombres portées (vue 3D) */
-.shadow-ellipse {
-  fill: rgba(0, 0, 0, 0.4);
-  filter: blur(4px);
+.planet-texture[data-planet='jupiter'],
+.planet-texture[data-planet='saturn'],
+.planet-texture[data-planet='uranus'],
+.planet-texture[data-planet='neptune'] {
+  opacity: 0.48;
+  mix-blend-mode: soft-light;
+  filter: saturate(1.05) contrast(0.95);
 }
 
-/* Axes planétaires */
-.axes {
+.poles {
   pointer-events: none;
 }
 
-.axis-line {
-  stroke: rgba(255, 255, 255, 0.7);
-  stroke-width: 1.5;
-  stroke-linecap: round;
-  opacity: 0.9;
+.pole-dot {
+  stroke: rgba(255, 255, 255, 0.68);
+  stroke-width: 0.8;
 }
 
-.voyagers {
-  font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+.pole-dot.lit {
+  fill: rgba(255, 255, 255, 0.92);
+  filter: drop-shadow(0 0 10px rgba(255, 204, 51, 0.28));
 }
 
-.voyager-marker text {
-  pointer-events: none;
+.pole-dot.dark {
+  fill: rgba(0, 0, 0, 0.84);
+  filter:
+    drop-shadow(0 0 10px rgba(255, 0, 128, 0.22))
+    drop-shadow(0 0 18px rgba(88, 101, 242, 0.16));
 }
 
-.voyager-node {
-  stroke: #0a0a0a;
-  stroke-width: 1;
+.pole-label {
+  fill: rgba(238, 242, 255, 0.92);
+  font-size: 9.5px;
+  font-weight: 900;
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: rgba(0, 0, 0, 0.85);
+  stroke-width: 3px;
 }
 
-.voyager-label {
-  fill: var(--text-main);
+.satellites {
+  cursor: pointer;
+}
+
+.sat-dot {
+  fill: rgba(0, 255, 240, 0.9);
+  stroke: rgba(255, 255, 255, 0.75);
+  stroke-width: 0.6;
+  filter: drop-shadow(0 0 12px rgba(0, 255, 240, 0.45));
+}
+
+.sat-dot.selected {
+  fill: rgba(255, 0, 128, 0.92);
+  filter:
+    drop-shadow(0 0 12px rgba(255, 0, 128, 0.42))
+    drop-shadow(0 0 24px rgba(88, 101, 242, 0.28));
+}
+
+.sat-label {
+  fill: rgba(238, 242, 255, 0.9);
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  paint-order: stroke;
+  stroke: rgba(0, 0, 0, 0.85);
+  stroke-width: 3px;
 }
 
-.voyager-distance {
-  fill: var(--text-soft);
-  font-size: 10px;
-}
-
-/* ------------------------------------------------------------------------- */
-/* Échelle 1 UA                                                              */
-/* ------------------------------------------------------------------------- */
-
-.scale-container {
-  margin-top: 8px;
-  font-size: 12px;
-  color: var(--text-soft);
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  max-width: 420px;
-}
-
-.scale-label {
-  font-weight: 500;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-
-.scale-bar-wrapper {
-  position: relative;
-  height: 4px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
-  overflow: hidden;
-}
-
-/* Barre représentant la longueur correspondant à 1 UA (en pixels) */
-.scale-bar {
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(
-    90deg,
-    var(--accent),
-    #7dd3fc,
-    var(--accent)
-  );
-  box-shadow: 0 0 12px rgba(59, 130, 246, 0.6);
-  transform-origin: left center;
-}
-
-/* Graduation décorative */
-.scale-bar-wrapper::before,
-.scale-bar-wrapper::after {
-  content: "";
+/* Overlay panneau infos */
+.space-stage app-planet-info-panel {
   position: absolute;
-  top: 50%;
-  width: 1px;
-  height: 8px;
-  background: rgba(255, 255, 255, 0.4);
-  transform: translateY(-50%);
-}
-
-.scale-bar-wrapper::before {
-  left: 0;
-}
-
-.scale-bar-wrapper::after {
-  right: 0;
-}
-
-.scale-text {
-  font-style: italic;
-  color: var(--text-soft);
-}
-
-/* ------------------------------------------------------------------------- */
-/* Responsivité                                                              */
-/* ------------------------------------------------------------------------- */
-
-@media (max-width: 1200px) {
-  .solar-system-layout {
-    gap: 16px;
-  }
-
-  .right-pane {
-    max-width: 320px;
-  }
-}
-
-@media (max-width: 1024px) {
-  .solar-system-layout {
-    flex-direction: column;
-  }
-
-  .left-pane {
-    order: 1;
-  }
-
-  .right-pane {
-    order: 2;
-    max-width: 100%;
-  }
-
-  .solar-system-svg {
-    margin-inline: auto;
-  }
-
-  .scale-container {
-    max-width: 100%;
-  }
-}
-
-@media (max-width: 768px) {
-  .controls {
-    padding: 3px;
-    gap: 4px;
-  }
-
-  .controls button {
-    font-size: 12px;
-    padding: 5px 10px;
-  }
-
-  .solar-system-svg {
-    max-width: 100%;
-  }
-}
-
-@media (max-width: 480px) {
-  .solar-system-layout {
-    gap: 12px;
-  }
-
-  .controls {
-    border-radius: var(--radius-md);
-  }
-
-  .scale-container {
-    font-size: 11px;
-  }
-}
-
-/* ------------------------------------------------------------------------- */
-/* Accessibilité & états focus                                               */
-/* ------------------------------------------------------------------------- */
-
-.solar-system-svg:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 4px;
-}
-
-button:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+  right: 22px;
+  bottom: 22px;
+  z-index: 10;
+  max-width: min(420px, calc(100vw - 44px));
 }

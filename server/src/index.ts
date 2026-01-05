@@ -8,6 +8,7 @@ import {
 import { logInfo } from './observability/logger';
 import { applyRequestTracing } from './observability/requestTracing';
 import voyagersRouter from './routes/voyagers';
+import catalogRouter from './routes/catalog';
 import path from 'path';
 import fs from 'fs';
 
@@ -22,6 +23,7 @@ app.use(express.json());
 
 app.use('/api/ephemeris', ephemerisRouter);
 app.use('/api/voyagers', voyagersRouter);
+app.use('/api/catalog', catalogRouter);
 
 app.get('/', (_req, res) => {
   res.send('Solar System Real – API JPL Horizons');

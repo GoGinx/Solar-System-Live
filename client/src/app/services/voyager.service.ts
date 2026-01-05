@@ -14,7 +14,9 @@ export class VoyagerService {
 
   constructor(private http: HttpClient) {}
 
-  getVoyagers(): Observable<VoyagerSnapshot> {
-    return this.http.get<VoyagerSnapshot>(`${this.baseUrl}/voyagers`);
+  getVoyagers(options?: { forceRefresh?: boolean }): Observable<VoyagerSnapshot> {
+    return this.http.get<VoyagerSnapshot>(`${this.baseUrl}/voyagers`, {
+      params: options?.forceRefresh ? { refresh: '1' } : undefined
+    });
   }
 }

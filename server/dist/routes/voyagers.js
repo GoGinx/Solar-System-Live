@@ -77,7 +77,8 @@ router.get('/', async (req, res) => {
         const earth = earthSnapshot.payload?.bodies?.find((b) => b.name === 'earth') ?? null;
         const results = await Promise.all(voyagers_1.VOYAGERS.map(async (cfg) => {
             const vec = await (0, horizonsClient_1.fetchPlanetStateVector)(cfg.horizonsId, cfg.displayName, {
-                correlationId: requestId
+                correlationId: requestId,
+                includeObserver: false
             });
             const distAu = magnitude(vec.x_au, vec.y_au, vec.z_au);
             const distEarthAu = deltaMagnitude(vec.x_au, vec.y_au, vec.z_au, earth?.x_au, earth?.y_au, earth?.z_au);

@@ -104,17 +104,40 @@ function computeTrajectory(
   };
 }
 
+function parseForceRefresh(req: Request): boolean {
+  const refreshParam = req.query?.refresh;
+  const refreshParamValue =
+    typeof refreshParam === 'string'
+      ? refreshParam
+      : Array.isArray(refreshParam)
+      ? refreshParam.find((v) => v === '1' || v === 'true')
+      : undefined;
+  const refreshHeaderRaw = req.headers['x-refresh-cache'];
+  const refreshHeader = Array.isArray(refreshHeaderRaw)
+    ? refreshHeaderRaw[0]
+    : refreshHeaderRaw;
+
+  return (
+    refreshParamValue === '1' ||
+    refreshParamValue === 'true' ||
+    refreshHeader === '1' ||
+    refreshHeader === 'true'
+  );
+}
+
 router.get('/', async (req: Request, res: Response) => {
   const requestId = req.requestId;
+  const forceRefresh = parseForceRefresh(req);
 
   try {
-    const earthSnapshot = await getSnapshot({ correlationId: requestId });
+    const earthSnapshot = await getSnapshot({ correlationId: requestId, forceRefresh });
     const earth = earthSnapshot.payload?.bodies?.find((b) => b.name === 'earth') ?? null;
 
     const results = await Promise.all(
       VOYAGERS.map(async (cfg) => {
         const vec = await fetchPlanetStateVector(cfg.horizonsId, cfg.displayName, {
-          correlationId: requestId
+          correlationId: requestId,
+          includeObserver: false
         });
 
         const distAu = magnitude(vec.x_au, vec.y_au, vec.z_au);

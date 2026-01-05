@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { PlanetName } from '../config/planets';
-import { logError, logInfo } from '../observability/logger';
+import { logError, logInfo, logWarn } from '../observability/logger';
 
 export interface PlanetStateVector {
   name: PlanetName | string;
@@ -23,8 +23,31 @@ export interface PlanetStateVector {
   timestamp: string;
 }
 
-// Nouvelle URL publique Horizons (l'ancien sous-domaine ssd-api renvoie 404)
-const HORIZONS_URL = 'https://ssd.jpl.nasa.gov/api/horizons.api';
+// URLs Horizons (primaire + fallback)
+const HORIZONS_URLS = Array.from(
+  new Set(
+    [
+      process.env.HORIZONS_API_URL,
+      'https://ssd.jpl.nasa.gov/api/horizons.api'
+    ].filter((u): u is string => !!u)
+  )
+);
+
+const HORIZONS_USER_AGENT =
+  process.env.HORIZONS_USER_AGENT ?? 'Solar-System-Live/1.0 (+https://github.com)';
+const HORIZONS_TIMEOUT_MS = Number(process.env.HORIZONS_TIMEOUT_MS ?? 12_000);
+const HORIZONS_RETRIES = Number(process.env.HORIZONS_RETRIES ?? 2);
+const HORIZONS_RETRY_BASE_MS = Number(process.env.HORIZONS_RETRY_BASE_MS ?? 350);
+
+function shouldRetry(error: any): boolean {
+  const status = error?.response?.status;
+  if (!status) return true;
+  return status >= 500 || status === 429;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 const AU_IN_KM = 149_597_870.7;
 const SECONDS_PER_DAY = 86_400;
@@ -44,7 +67,7 @@ function formatUtcDate(d: Date): string {
 export async function fetchPlanetStateVector(
   horizonsId: string,
   name: PlanetName | string,
-  options?: { correlationId?: string }
+  options?: { correlationId?: string; includeObserver?: boolean }
 ): Promise<PlanetStateVector> {
   const requestStarted = Date.now();
   const now = new Date();
@@ -183,21 +206,92 @@ export async function fetchPlanetStateVector(
     };
   };
 
+  const requestWithFallback = async (params: Record<string, string>, label: string) => {
+    let lastError: any = null;
+    for (const url of HORIZONS_URLS) {
+      for (let attempt = 0; attempt <= HORIZONS_RETRIES; attempt += 1) {
+        try {
+          return await axios.get(url, {
+            params,
+            timeout: HORIZONS_TIMEOUT_MS,
+            headers: {
+              'User-Agent': HORIZONS_USER_AGENT,
+              Accept: 'application/json'
+            }
+          });
+        } catch (err: any) {
+          lastError = err;
+          logWarn('horizons_endpoint_failed', {
+            name,
+            horizonsId,
+            label,
+            url,
+            requestId: options?.correlationId,
+            status: err?.response?.status,
+            attempt,
+            retries: HORIZONS_RETRIES,
+            error: err?.message ?? String(err)
+          });
+
+          if (attempt < HORIZONS_RETRIES && shouldRetry(err)) {
+            const delay = HORIZONS_RETRY_BASE_MS * Math.pow(2, attempt);
+            await sleep(delay);
+            continue;
+          }
+          break;
+        }
+      }
+    }
+    throw lastError ?? new Error('All Horizons endpoints failed');
+  };
+
   try {
-    const [vectorResponse, observerResponse] = await Promise.all([
-      axios.get(HORIZONS_URL, { params }),
-      axios.get(HORIZONS_URL, { params: observerParams })
+    const includeObserver = options?.includeObserver ?? false;
+    const observerPromise = includeObserver
+      ? requestWithFallback(observerParams, 'observer')
+      : Promise.resolve(null);
+
+    const [vectorResult, observerResult] = await Promise.allSettled([
+      requestWithFallback(params, 'vector'),
+      observerPromise
     ]);
+
+    if (vectorResult.status !== 'fulfilled') {
+      throw vectorResult.reason;
+    }
+    const vectorResponse = vectorResult.value;
+    const observerResponse = observerResult.status === 'fulfilled' ? observerResult.value : null;
     const latencyMs = Date.now() - requestStarted;
 
     const data = vectorResponse.data;
-    const observerData =
-      typeof observerResponse?.data?.result === 'string'
-        ? observerResponse.data.result
-        : typeof observerResponse?.data === 'string'
-        ? observerResponse.data
-        : undefined;
-    const observerExtras = observerData ? parseObserverFromResult(observerData) : undefined;
+    let observerExtras;
+    if (observerResponse) {
+      const observerData =
+        typeof observerResponse?.data?.result === 'string'
+          ? observerResponse.data.result
+          : typeof observerResponse?.data === 'string'
+          ? observerResponse.data
+          : undefined;
+      if (observerData) {
+        try {
+          observerExtras = parseObserverFromResult(observerData);
+        } catch (err: any) {
+          logWarn('horizons_observer_parse_failed', {
+            name,
+            horizonsId,
+            requestId: options?.correlationId,
+            error: err?.message ?? String(err)
+          });
+        }
+      }
+    } else if (includeObserver && observerResult.status === 'rejected') {
+      logWarn('horizons_observer_error', {
+        name,
+        horizonsId,
+        requestId: options?.correlationId,
+        error: observerResult.reason?.message ?? String(observerResult.reason)
+      });
+    }
 
     // Ancienne structure (si jamais l’API fournit encore un tableau `vectors`).
     if (data && data.result && Array.isArray(data.result.vectors) && data.result.vectors.length > 0) {

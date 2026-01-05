@@ -1,187 +1,189 @@
 :host {
   display: block;
-  /* Variables locales au composant (facile à retoucher) */
-  --panel-bg: radial-gradient(circle at top left, #2b2b4a 0%, #141427 55%, #05050d 100%);
-  --panel-border: rgba(255, 255, 255, 0.06);
-  --panel-shadow: 0 14px 45px rgba(0, 0, 0, 0.75);
-  --panel-radius: 14px;
-
-  --text-main: #f5f5ff;
-  --text-muted: #b7bbdd;
-  --text-soft: #9fa3d1;
-
-  --accent: #3b82f6;
-  --accent-soft: rgba(59, 130, 246, 0.15);
-
-  --divider: rgba(255, 255, 255, 0.06);
-  --chip-bg: rgba(255, 255, 255, 0.06);
+  --panel-bg: rgba(6, 10, 26, 0.72);
+  --panel-border-a: rgba(0, 255, 240, 0.45);
+  --panel-border-b: rgba(88, 101, 242, 0.45);
+  --text: #eef2ff;
+  --muted: rgba(238, 242, 255, 0.68);
+  --chip: rgba(0, 255, 240, 0.18);
 }
 
-/* Animation d’apparition subtile */
-@keyframes panel-fade-in-up {
+@keyframes neon-breathe {
   0% {
-    opacity: 0;
-    transform: translateY(8px) scale(0.98);
+    filter: drop-shadow(0 0 10px rgba(0, 255, 240, 0.25));
+  }
+  50% {
+    filter: drop-shadow(0 0 18px rgba(0, 255, 240, 0.38));
   }
   100% {
-    opacity: 1;
-    transform: translateY(0) scale(1);
+    filter: drop-shadow(0 0 10px rgba(0, 255, 240, 0.25));
   }
 }
 
-/* Carte principale */
 .panel {
   position: relative;
-  box-sizing: border-box;
-
-  min-width: 260px;
-  max-width: 360px;
-  padding: 18px 18px 16px 18px;
-
-  border-radius: var(--panel-radius);
+  padding: 14px 14px 12px 14px;
+  border-radius: 14px;
   background: var(--panel-bg);
-  color: var(--text-main);
-
+  color: var(--text);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   box-shadow:
-    var(--panel-shadow),
-    0 0 0 1px var(--panel-border);
-
-  backdrop-filter: blur(10px);
-
-  animation: panel-fade-in-up 180ms ease-out;
+    0 18px 60px rgba(0, 0, 0, 0.75),
+    0 0 0 1px rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+  animation: neon-breathe 2.2s ease-in-out infinite;
 }
 
-/* Bouton de fermeture */
+.panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 1px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--panel-border-a), var(--panel-border-b), rgba(255, 0, 128, 0.25));
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  -webkit-mask-composite: xor;
+  pointer-events: none;
+  opacity: 0.9;
+}
+
 .close-btn {
   position: absolute;
-  top: 6px;
-  right: 8px;
-
-  border: none;
-  background: transparent;
-  color: #ffffff;
-  font-size: 20px;
+  top: 8px;
+  right: 10px;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  font-size: 18px;
   line-height: 1;
   cursor: pointer;
-  padding: 2px 6px;
-  border-radius: 999px;
-
-  transition:
-    background 0.16s ease,
-    transform 0.1s ease,
-    box-shadow 0.16s ease;
+  transition: transform 120ms ease-out, background 120ms ease-out, border-color 120ms ease-out;
 }
 
 .close-btn:hover {
-  background: rgba(255, 255, 255, 0.12);
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
   transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(0, 255, 240, 0.35);
 }
 
-.close-btn:active {
-  transform: translateY(0);
-  box-shadow: none;
+.hdr {
+  padding-right: 44px;
 }
 
-/* Titre planète */
-.panel h2 {
-  margin: 0 26px 6px 0; /* laisser la place pour le bouton */
-  font-size: 18px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.live-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--chip);
+  border: 1px solid rgba(0, 255, 240, 0.28);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  font-size: 11px;
+}
+
+h2 {
+  margin: 0;
+  font-size: 16px;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
-/* Soulignement léger sous le titre */
-.panel h2::after {
-  content: "";
-  display: block;
-  width: 40px;
-  height: 2px;
+.subtitle {
   margin-top: 6px;
-  border-radius: 999px;
-  background: linear-gradient(to right, var(--accent), transparent);
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: 0.02em;
 }
 
-/* Description */
-.panel p {
-  margin: 8px 0 14px 0;
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--text-muted);
+.body {
+  margin-top: 10px;
 }
 
-/* Bloc liste des caractéristiques */
-.panel ul {
+.desc {
+  margin: 10px 0 10px 0;
+  color: rgba(238, 242, 255, 0.78);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.section-title {
+  margin-top: 12px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(238, 242, 255, 0.7);
+}
+
+.section-title:first-of-type {
+  margin-top: 0;
+}
+
+.info-list {
   list-style: none;
-  margin: 0;
-  padding: 10px 0 0 0;
-  border-top: 1px solid var(--divider);
+  padding: 0;
+  margin: 6px 0 0 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
-/* Ligne de caractéristique */
-.panel li {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 16px;
-
-  padding: 5px 0;
-  font-size: 13px;
-  line-height: 1.4;
-  color: var(--text-main);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+.info-list li {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 14px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  font-size: 12.5px;
 }
 
-.panel li:last-child {
-  border-bottom: none;
+.info-list li span:first-child {
+  color: rgba(238, 242, 255, 0.72);
 }
 
-/* Si tu gardes le texte brut dans <li>, ça passe.
-   Si tu ajoutes deux <span> (label / valeur), tu peux affiner : */
-
-/* Label (première partie) */
-.panel li span:first-child {
-  color: var(--text-soft);
+.info-list li span:last-child {
+  text-align: right;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.92);
 }
 
-/* Valeur (deuxième partie) */
-.panel li span:last-child {
-  font-weight: 500;
+.loading {
+  padding: 16px 0 6px 0;
+  color: var(--muted);
+  font-size: 12.5px;
+  letter-spacing: 0.02em;
 }
 
-/* Variante “chip” pour les valeurs très longues (au besoin) */
-.panel li span.value-chip {
-  padding: 2px 6px;
-  border-radius: 999px;
-  background: var(--chip-bg);
-}
-
-/* Petits écrans */
-@media (max-width: 768px) {
-  .panel {
-    max-width: 100%;
-    padding: 16px;
+@media (max-width: 520px) {
+  .info-list li {
+    grid-template-columns: 1fr;
+    gap: 6px;
   }
-
-  .panel h2 {
-    font-size: 17px;
+  .info-list li span:last-child {
+    text-align: left;
   }
 }
 
-/* Très petits écrans */
-@media (max-width: 480px) {
-  .panel {
-    border-radius: 10px;
-    padding: 14px;
-  }
+a {
+  color: rgba(0, 255, 240, 0.92);
+  text-decoration: none;
+}
 
-  .panel h2 {
-    font-size: 16px;
-  }
-
-  .panel p,
-  .panel li {
-    font-size: 12px;
-  }
+a:hover {
+  text-decoration: underline;
 }

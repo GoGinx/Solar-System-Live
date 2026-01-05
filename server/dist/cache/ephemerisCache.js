@@ -77,37 +77,102 @@ async function writeCache(record, backend) {
 }
 async function buildPlanetSnapshot(correlationId) {
     const started = Date.now();
-    const results = await Promise.all(planets_1.PLANETS.map((cfg) => (0, horizonsClient_1.fetchPlanetStateVector)(cfg.horizonsId, cfg.name, { correlationId })));
+    const cached = await readCache();
+    const fallbackBodies = new Map();
+    for (const body of cached?.payload?.bodies ?? []) {
+        fallbackBodies.set(body.name, body);
+    }
+    const results = [];
+    for (const cfg of planets_1.PLANETS) {
+        try {
+            const value = await (0, horizonsClient_1.fetchPlanetStateVector)(cfg.horizonsId, cfg.name, {
+                correlationId,
+                includeObserver: false
+            });
+            results.push({ status: 'fulfilled', value });
+        }
+        catch (err) {
+            results.push({ status: 'rejected', reason: err });
+        }
+    }
     const latencyMs = Date.now() - started;
     (0, metrics_1.recordHorizonsLatency)(latencyMs);
-    const timestamp = results[0]?.timestamp ?? new Date().toISOString();
+    const cachedMeta = cached?.payload?.metadata;
+    const bodies = [];
+    const usedFallback = [];
+    const missing = [];
+    const timestamps = [];
+    let referenceFrame = cachedMeta?.referenceFrame ?? 'J2000-ECLIPTIC';
+    let velocityUnit = cachedMeta?.velocityUnit ?? 'AU/day';
+    results.forEach((result, index) => {
+        const cfg = planets_1.PLANETS[index];
+        if (result.status === 'fulfilled') {
+            const r = result.value;
+            referenceFrame = r.referenceFrame ?? referenceFrame;
+            velocityUnit = r.velocityUnit ?? velocityUnit;
+            if (r.timestamp) {
+                timestamps.push(r.timestamp);
+            }
+            bodies.push({
+                name: r.name,
+                x_au: r.x_au,
+                y_au: r.y_au,
+                z_au: r.z_au,
+                vx: r.vx_au_per_day,
+                vy: r.vy_au_per_day,
+                vz: r.vz_au_per_day,
+                velocityUnit: r.velocityUnit,
+                timestamp: r.timestamp,
+                range_au: r.range_au,
+                range_rate_km_s: r.range_rate_km_s,
+                light_time_minutes: r.light_time_minutes,
+                solar_elongation_deg: r.solar_elongation_deg,
+                phase_angle_deg: r.phase_angle_deg,
+                illumination_fraction: r.illumination_fraction,
+                apparent_magnitude: r.apparent_magnitude
+            });
+            return;
+        }
+        const fallback = fallbackBodies.get(cfg.name);
+        const errMessage = result.reason?.message ?? String(result.reason);
+        if (fallback) {
+            usedFallback.push(cfg.name);
+            if (fallback.timestamp) {
+                timestamps.push(fallback.timestamp);
+            }
+            bodies.push({ ...fallback });
+            (0, logger_1.logWarn)('horizons_body_fallback', {
+                name: cfg.name,
+                requestId: correlationId,
+                error: errMessage
+            });
+        }
+        else {
+            missing.push(cfg.name);
+            (0, logger_1.logWarn)('horizons_body_missing', {
+                name: cfg.name,
+                requestId: correlationId,
+                error: errMessage
+            });
+        }
+    });
+    if (bodies.length === 0) {
+        throw new Error('No Horizons data available');
+    }
+    const timestamp = timestamps[0] ?? cached?.payload?.timestamp ?? new Date().toISOString();
     return {
         timestamp,
         metadata: {
             source: 'NASA-JPL-Horizons',
-            referenceFrame: results[0]?.referenceFrame ?? 'J2000-ECLIPTIC',
+            referenceFrame,
             distanceUnit: 'AU',
-            velocityUnit: results[0]?.velocityUnit ?? 'AU/day',
-            responseTimeMs: latencyMs
+            velocityUnit,
+            responseTimeMs: latencyMs,
+            partial: usedFallback.length > 0 || missing.length > 0,
+            fallbackBodies: usedFallback.length ? usedFallback : undefined,
+            missingBodies: missing.length ? missing : undefined
         },
-        bodies: results.map((r) => ({
-            name: r.name,
-            x_au: r.x_au,
-            y_au: r.y_au,
-            z_au: r.z_au,
-            vx: r.vx_au_per_day,
-            vy: r.vy_au_per_day,
-            vz: r.vz_au_per_day,
-            velocityUnit: r.velocityUnit,
-            timestamp: r.timestamp,
-            range_au: r.range_au,
-            range_rate_km_s: r.range_rate_km_s,
-            light_time_minutes: r.light_time_minutes,
-            solar_elongation_deg: r.solar_elongation_deg,
-            phase_angle_deg: r.phase_angle_deg,
-            illumination_fraction: r.illumination_fraction,
-            apparent_magnitude: r.apparent_magnitude
-        }))
+        bodies
     };
 }
 async function refreshSnapshot(reason, correlationId) {
