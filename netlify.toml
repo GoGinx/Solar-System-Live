@@ -9,7 +9,7 @@
 
 [dev]
   # For `netlify dev`: start API on 3000 and client on 4201 (proxy on 4200).
-  command = "powershell -Command \"Start-Process npm -ArgumentList '--prefix','server','run','dev' -WorkingDirectory ..; npm run start -- --port 4201\""
+  command = "node ../scripts/netlify-dev.js"
   # Port d'écoute de Netlify Dev (proxy local) et port cible du serveur API/front.
   port = 4200
   targetPort = 4201
