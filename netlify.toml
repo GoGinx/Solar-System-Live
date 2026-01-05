@@ -9,10 +9,10 @@
 
 [dev]
   # Pour `netlify dev`: un seul serveur (build front + API Express qui sert le dist).
-  command = "npm run dev:single"
+  command = "npm --prefix .. run dev"
   # Port d'écoute de Netlify Dev (proxy local) et port cible du serveur API/front.
-  port = 4200
-  targetPort = 3000
+  port = 8888
+  targetPort = 4200
   framework = "#custom"
   publish = "client/dist/solar-system-real-client"
 
