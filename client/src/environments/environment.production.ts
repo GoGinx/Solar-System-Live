@@ -1,4 +1,5 @@
 export const environment = {
   production: true,
-  apiBaseUrl: '/api/ephemeris'
+  apiBaseUrl: '/api/ephemeris',
+  catalogUrl: '/api/catalog'
 };

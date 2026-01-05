@@ -1,471 +1,158 @@
-<div class="solar-system-layout">
-  <!-- Colonne gauche : contrôles + vue SVG + échelle -->
-  <div class="left-pane">
-    <div class="controls-stack">
-      <div class="status-banner frozen" *ngIf="frozenSnapshot">
-        <div class="status-title">Données gelées (snapshot)</div>
-        <p>
-          Les dernières éphémérides valides sont réutilisées car Horizons est indisponible.
-          <span *ngIf="freezeReason">Motif : {{ freezeReason }}.</span>
-          <span *ngIf="freshnessLabel">Fraîcheur : {{ freshnessLabel }}.</span>
-          <span *ngIf="lastRequestId">Requête #{{ lastRequestId }}</span>
-        </p>
-      </div>
+<div class="space-stage" [style.--selected-planet-scale]="selectedPlanetScale">
+  <svg
+    class="solar-system-svg"
+    [attr.width]="width"
+    [attr.height]="height"
+    [attr.viewBox]="'0 0 ' + width + ' ' + height"
+    role="img"
+    [attr.aria-label]="'aria.solarMap' | t"
+  >
+    <defs>
+      <radialGradient id="sunGradient">
+        <stop offset="0%" stop-color="#ffffdd" />
+        <stop offset="70%" stop-color="#ffcc33" />
+        <stop offset="100%" stop-color="#dd8800" />
+      </radialGradient>
 
-      <div class="status-banner error" *ngIf="!frozenSnapshot && errorMessage">
-        <div class="status-title">Erreur API Horizons</div>
-        <p>{{ errorMessage }}</p>
-      </div>
-
-      <!-- Switch 2D / 3D -->
-      <div
-        class="controls"
-        role="radiogroup"
-        aria-label="Mode d'affichage du système solaire"
+      <!-- Per-planet shading (day/night) -->
+      <radialGradient
+        *ngFor="let dp of displayPlanets; trackBy: trackByPlanetName"
+        [attr.id]="'planetGrad-' + dp.planet.name"
+        cx="50%"
+        cy="50%"
+        r="80%"
+        [attr.fx]="dp.gradFx"
+        [attr.fy]="dp.gradFy"
       >
-        <button
-          type="button"
-          (click)="setViewMode('2d')"
-          [class.active]="viewMode === '2d'"
-          role="radio"
-          [attr.aria-checked]="viewMode === '2d'"
-        >
-          Vue 2D (vue du dessus)
-        </button>
+        <stop offset="0%" [attr.stop-color]="dp.lightColor" stop-opacity="1" />
+        <stop offset="52%" [attr.stop-color]="dp.baseColor" stop-opacity="1" />
+        <stop offset="78%" [attr.stop-color]="dp.planet.color" stop-opacity="1" />
+        <stop offset="100%" [attr.stop-color]="dp.darkColor" stop-opacity="1" />
+      </radialGradient>
 
-        <button
-          type="button"
-          (click)="setViewMode('3d')"
-          [class.active]="viewMode === '3d'"
-          role="radio"
-          [attr.aria-checked]="viewMode === '3d'"
-        >
-          Vue 3D (projection oblique)
-        </button>
-      </div>
+      <!-- Per-planet textures (rotating) -->
+      <pattern
+        *ngFor="let dp of displayPlanets; trackBy: trackByPlanetName"
+        [attr.id]="'planetTex-' + dp.planet.name"
+        patternUnits="objectBoundingBox"
+        patternContentUnits="objectBoundingBox"
+        width="1"
+        height="1"
+        [attr.patternTransform]="'rotate(' + dp.textureRotationDeg + ' 0.5 0.5)'"
+      >
+        <image
+          x="0"
+          y="0"
+          width="1"
+          height="1"
+          preserveAspectRatio="xMidYMid slice"
+          [attr.href]="dp.textureUrl"
+          [attr.xlink:href]="dp.textureUrl"
+        />
+      </pattern>
+    </defs>
 
-      <!-- Timelapse -->
-      <div class="timelapse-panel" aria-label="Contrôles de timelapse">
-        <div class="timelapse-row">
-          <div class="timelapse-label">
-            Timelapse éphémérides
-            <span class="tag">jour / semaine / mois</span>
-          </div>
+    <!-- Sun (center) -->
+    <circle
+      [attr.cx]="centerX"
+      [attr.cy]="centerY"
+      [attr.r]="14"
+      fill="url(#sunGradient)"
+      class="sun sun-clickable"
+      (click)="onSunClick(); $event.stopPropagation()"
+    ></circle>
+    <circle
+      [attr.cx]="centerX"
+      [attr.cy]="centerY"
+      [attr.r]="5"
+      fill="#ffcc33"
+      class="sun-core"
+    ></circle>
 
-          <div class="timelapse-buttons">
-            <button type="button" [class.active]="timeStepDays === 1" (click)="setTimeStep(1)">Jour</button>
-            <button type="button" [class.active]="timeStepDays === 7" (click)="setTimeStep(7)">Semaine</button>
-            <button type="button" [class.active]="timeStepDays === 30" (click)="setTimeStep(30)">Mois</button>
-            <button type="button" class="ghost" (click)="resetTimeOffset()">Réinitialiser</button>
-          </div>
-        </div>
+    <!-- Sunlight ray to selected body -->
+    <g class="sunlight" *ngIf="selectedDisplayPlanet as sdp">
+      <line [attr.x1]="centerX" [attr.y1]="centerY" [attr.x2]="sdp.x" [attr.y2]="sdp.y" class="sun-ray"></line>
+    </g>
 
-        <div class="timelapse-slider">
-          <input
-            type="range"
-            [min]="-maxTimeOffsetDays"
-            [max]="maxTimeOffsetDays"
-            [step]="timeStepDays"
-            [value]="timeOffsetDays"
-            (input)="onTimeOffsetChange($event)"
-            aria-label="Décalage temporel en jours"
-          />
-          <div class="timelapse-values">
-            <span>Déplacement : {{ timeOffsetDays | number: '1.0-1' }} j</span>
-            <span *ngIf="lastUpdateTimestamp">
-              Référence : {{ lastUpdateTimestamp }}
-            </span>
-          </div>
-        </div>
-
-        <div class="inertial-toggle">
-          <label>
-            <input
-              type="checkbox"
-              [checked]="enableInertialPlayback"
-              (change)="onToggleInertialPlayback($any($event.target).checked)"
-            />
-            Lecture inertielle (réel + vx/vy/vz)
-          </label>
-          <span class="inertial-hint">
-            Continue d’animer entre deux fetchs en utilisant les vitesses {{ metadata?.velocityUnit || 'AU/j' }}.
-          </span>
-        </div>
-
-        <div class="view-toggles" *ngIf="viewMode === '3d'">
-          <label>
-            <input type="checkbox" [checked]="showOrbitalPlanes" (change)="onToggleOrbitPlanes($any($event.target).checked)" />
-            Plans orbitaux visibles
-          </label>
-          <label>
-            <input type="checkbox" [checked]="showPlanetAxes" (change)="onTogglePlanetAxes($any($event.target).checked)" />
-            Axes planétaires
-          </label>
-          <label>
-            <input type="checkbox" [checked]="showShadows" (change)="onToggleShadows($any($event.target).checked)" />
-            Ombres portées
-          </label>
-        </div>
-      </div>
-
-      <div class="focus-status" *ngIf="focusedPlanet as focus">
-        <div class="focus-chip">
-          <span class="focus-dot" [style.background]="focus.color"></span>
-          Vue centrée sur {{ focus.displayName }}
-        </div>
-        <button type="button" class="ghost" (click)="clearFocus()">Vue globale</button>
-      </div>
-
-      <!-- Qualité / source -->
-      <div class="data-quality" *ngIf="metadata">
-        <div>Source : {{ metadata?.source || 'NASA-JPL-Horizons' }}</div>
-        <div>Repère : {{ metadata?.referenceFrame || 'J2000-ECLIPTIC' }}</div>
-        <div>Unités : {{ metadata?.distanceUnit || 'AU' }} / {{ metadata?.velocityUnit || 'AU/day' }}</div>
-        <div *ngIf="metadata?.responseTimeMs">Latence API : {{ metadata?.responseTimeMs | number:'1.0-0' }} ms</div>
-      </div>
-
-      <!-- Légende couleurs -->
-      <div class="color-legend">
-        <button
-          type="button"
-          *ngFor="let p of planets"
-          class="legend-item"
-          [class.active]="selectedPlanet?.name === p.name || focusPlanetName === p.name"
-          (click)="onLegendSelect(p)"
-        >
-          <span class="legend-dot" [style.background]="p.color"></span>
-          {{ p.displayName }}
-        </button>
-      </div>
-    </div>
-
-    <!-- Vue principale du système solaire -->
-    <svg
-      class="solar-system-svg"
-      [attr.width]="width"
-      [attr.height]="height"
-      [attr.viewBox]="'0 0 ' + width + ' ' + height"
-      role="img"
-      aria-labelledby="solarTitle solarDesc"
-    >
-      <title id="solarTitle">Système solaire – positions en temps réel</title>
-      <desc id="solarDesc">
-        Visualisation des planètes du système solaire (Pluton incluse) autour du Soleil.
-        Les positions sont basées sur des éphémérides temps réel fournies par le backend.
-      </desc>
-
-      <!-- Soleil (réduit pour ne pas masquer les planètes) -->
-      <defs>
-        <radialGradient id="sunGradient">
-          <stop offset="0%" stop-color="#ffffdd" />
-          <stop offset="70%" stop-color="#ffcc33" />
-          <stop offset="100%" stop-color="#dd8800" />
-        </radialGradient>
-      </defs>
-
+    <!-- Orbits (2D) -->
+    <g class="orbits" [attr.aria-label]="'aria.orbits' | t">
       <circle
+        *ngFor="let p of planets"
         [attr.cx]="centerX"
         [attr.cy]="centerY"
-        [attr.r]="15"
-        fill="url(#sunGradient)"
+        [attr.r]="getOrbitRadiusPx(p)"
+        class="orbit-circle"
       ></circle>
+    </g>
 
-      <!-- Plans orbitaux (vue 3D) -->
-      <g class="orbit-planes" *ngIf="viewMode === '3d' && showOrbitalPlanes">
-        <ellipse
-          *ngFor="let p of planets"
-          [attr.cx]="centerX"
-          [attr.cy]="centerY"
-          [attr.rx]="getOrbitRadiusPx(p)"
-          [attr.ry]="getOrbitRadiusPx(p) * orbitPlaneCompression(p)"
-          class="orbit-plane"
-        ></ellipse>
-      </g>
-
-      <!-- Orbites (uniquement en vue 2D pour lisibilité) -->
-      <g class="orbits" *ngIf="viewMode === '2d'">
+    <!-- Planets -->
+    <g class="planets" [attr.aria-label]="'aria.planets' | t">
+      <g
+        *ngFor="let dp of displayPlanets; trackBy: trackByPlanetName"
+        class="planet-group"
+        [class.selected]="dp.isSelected"
+        (click)="onPlanetClick(dp.planet); $event.stopPropagation()"
+      >
         <circle
-          *ngFor="let p of planets"
-          [attr.cx]="centerX"
-          [attr.cy]="centerY"
-          [attr.r]="getOrbitRadiusPx(p)"
-          class="orbit-circle"
-        ></circle>
-      </g>
-
-      <!-- Ombres portées (vue 3D uniquement) -->
-      <g class="shadows" *ngIf="viewMode === '3d' && showShadows">
-        <ellipse
-          *ngFor="let dp of displayPlanets"
-          [attr.cx]="dp.shadow?.cx"
-          [attr.cy]="dp.shadow?.cy"
-          [attr.rx]="dp.shadow?.rx"
-          [attr.ry]="dp.shadow?.ry"
-          class="shadow-ellipse"
-        ></ellipse>
-      </g>
-
-      <!-- Axes planétaires (vue 3D) -->
-      <g class="axes" *ngIf="viewMode === '3d' && showPlanetAxes">
-        <line
-          *ngFor="let dp of displayPlanets"
-          [attr.x1]="dp.axis?.x1"
-          [attr.y1]="dp.axis?.y1"
-          [attr.x2]="dp.axis?.x2"
-          [attr.y2]="dp.axis?.y2"
-          class="axis-line"
-        ></line>
-      </g>
-
-      <!-- Planètes (positions injectées depuis les éphémérides réelles) -->
-      <g class="planets" aria-label="Planètes du système solaire">
-        <circle
-          *ngFor="let dp of displayPlanets"
           [attr.cx]="dp.x"
           [attr.cy]="dp.y"
-          [attr.r]="planetRadiusToPixels(dp.planet)"
-          [attr.fill]="dp.planet.color"
-          (click)="onPlanetClick(dp.planet)"
+          [attr.r]="dp.radiusPx"
+          [attr.fill]="'url(#planetGrad-' + dp.planet.name + ')'"
           class="planet-circle"
-          [class.selected]="dp.isSelected"
-          [class.focused]="dp.isFocused"
-        >
-          <title>{{ dp.planet.displayName }}</title>
-        </circle>
+        ></circle>
+        <circle
+          [attr.cx]="dp.x"
+          [attr.cy]="dp.y"
+          [attr.r]="dp.radiusPx"
+          [attr.fill]="'url(#planetTex-' + dp.planet.name + ')'"
+          class="planet-texture"
+          [attr.data-planet]="dp.planet.name"
+        ></circle>
       </g>
+    </g>
 
-      <!-- Sondes Voyager (positions héliocentriques) -->
-      <g class="voyagers" *ngIf="voyagerMarkers.length">
-        <g class="voyager-marker" *ngFor="let v of voyagerMarkers">
-          <line
-            [attr.x1]="v.x - 8"
-            [attr.y1]="v.y"
-            [attr.x2]="v.x + 8"
-            [attr.y2]="v.y"
-            [attr.stroke]="v.color"
-          ></line>
-          <line
-            [attr.x1]="v.x"
-            [attr.y1]="v.y - 8"
-            [attr.x2]="v.x"
-            [attr.y2]="v.y + 8"
-            [attr.stroke]="v.color"
-          ></line>
-          <circle
-            [attr.cx]="v.x"
-            [attr.cy]="v.y"
-            r="4"
-            [attr.fill]="v.color"
-            class="voyager-node"
-          ></circle>
-          <text [attr.x]="v.x + 10" [attr.y]="v.y - 6" class="voyager-label">
-            {{ v.name }}
-          </text>
-          <text [attr.x]="v.x + 10" [attr.y]="v.y + 8" class="voyager-distance">
-            {{ v.distanceLabel }}
-          </text>
-        </g>
+    <!-- Polar day/night indicators for selected planet -->
+    <g class="poles" *ngIf="selectedDisplayPlanet as sdp">
+      <g *ngIf="sdp.northPoleLit !== null && sdp.southPoleLit !== null">
+        <circle
+          [attr.cx]="sdp.x"
+          [attr.cy]="sdp.y - sdp.radiusPx * selectedPlanetScale - 10"
+          r="4.2"
+          class="pole-dot"
+          [class.lit]="sdp.northPoleLit"
+          [class.dark]="!sdp.northPoleLit"
+        ></circle>
+        <text [attr.x]="sdp.x" [attr.y]="sdp.y - sdp.radiusPx * selectedPlanetScale - 7" class="pole-label">N</text>
+
+        <circle
+          [attr.cx]="sdp.x"
+          [attr.cy]="sdp.y + sdp.radiusPx * selectedPlanetScale + 10"
+          r="4.2"
+          class="pole-dot"
+          [class.lit]="sdp.southPoleLit"
+          [class.dark]="!sdp.southPoleLit"
+        ></circle>
+        <text [attr.x]="sdp.x" [attr.y]="sdp.y + sdp.radiusPx * selectedPlanetScale + 13" class="pole-label">S</text>
       </g>
-    </svg>
+    </g>
 
-    <!-- Échelle 1 UA -->
-    <div class="scale-container">
-      <div class="scale-label">
-        Échelle radiale (compressée) – 1 UA
-      </div>
+    <!-- Satellites (only for focused planet) -->
+    <g class="satellites" *ngIf="displaySatellites.length" [attr.aria-label]="'aria.satellites' | t">
+      <g *ngFor="let s of displaySatellites; trackBy: trackByMoonId" (click)="onMoonClick(s.moon); $event.stopPropagation()">
+        <circle [attr.cx]="s.x" [attr.cy]="s.y" r="2.6" class="sat-dot" [class.selected]="s.isSelected"></circle>
+        <text *ngIf="s.isSelected" [attr.x]="s.x + 8" [attr.y]="s.y + 4" class="sat-label">
+          {{ s.moon.displayName }}
+        </text>
+      </g>
+    </g>
+  </svg>
 
-      <div class="scale-bar-wrapper" aria-hidden="true">
-        <div
-          class="scale-bar"
-          [style.width.px]="oneAuPixels"
-        ></div>
-      </div>
-
-      <div class="scale-text">
-        1 unité astronomique ≈ distance moyenne Terre–Soleil
-        (≈&nbsp;149&nbsp;600&nbsp;000&nbsp;km).  
-        L’échelle radiale est compressée pour garder toutes les planètes visibles.
-      </div>
-    </div>
-  </div>
-
-  <!-- Colonne droite : panneau d'information planète -->
-  <div class="right-pane">
-    <div class="selected-actions" *ngIf="selectedPlanet || focusPlanetName">
-      <button type="button" *ngIf="selectedPlanet" (click)="centerOnSelected()">Centrer sur {{ selectedPlanet.displayName }}</button>
-      <button type="button" class="ghost" *ngIf="focusPlanetName" (click)="clearFocus()">Vue globale</button>
-    </div>
-
-    <app-planet-info-panel
-      *ngIf="selectedPlanet"
-      [planet]="selectedPlanet"
-      [ephemeris]="selectedEphemeris"
-      (close)="onCloseInfo()"
-    ></app-planet-info-panel>
-
-    <div class="placeholder" *ngIf="!selectedPlanet">
-      <p>
-        Cliquez sur une planète dans la vue pour afficher ses données
-        d’éphémérides temps réel (NASA JPL Horizons).
-      </p>
-    </div>
-
-      <div class="voyager-panel">
-        <div class="panel-header">
-          <div>
-            <div class="panel-title">Voyager 1 & 2</div>
-            <div class="panel-subtitle">Données NASA JPL Horizons (km & miles)</div>
-            <div class="badge" *ngIf="voyagerSourceBadge">{{ voyagerSourceBadge }}</div>
-          </div>
-          <div class="panel-actions">
-            <button type="button" class="ghost" (click)="triggerManualRefresh()">Rafraîchir</button>
-            <button type="button" class="ghost" (click)="copyVoyagerSnapshotAsJson()">Copier JSON</button>
-            <button type="button" class="ghost" (click)="exportVoyagerCsv()">Exporter CSV</button>
-          </div>
-        </div>
-
-        <div class="status-banner error" *ngIf="voyagerError">
-          <div class="status-title">Voyager indisponible</div>
-          <p>{{ voyagerError }}</p>
-        </div>
-        <div class="status-banner" *ngIf="copyStatus === 'success' && copyMessage">
-          {{ copyMessage }}
-        </div>
-        <div class="status-banner error" *ngIf="copyStatus === 'error' && copyMessage">
-          {{ copyMessage }}
-        </div>
-        <div class="status-banner" *ngIf="dsnError && !voyagerError">
-          <div class="status-title">DSN</div>
-          <p>{{ dsnError }}</p>
-        </div>
-
-        <div class="voyager-compare" *ngIf="voyagerViews.length === 2">
-          <div class="compare-title">Comparatif express</div>
-          <div class="compare-table">
-            <div class="compare-row head">
-              <div class="cell">Paramètre</div>
-              <div class="cell">Voyager 1</div>
-              <div class="cell">Voyager 2</div>
-            </div>
-            <div class="compare-row">
-              <div class="cell label">Distance Soleil</div>
-              <div class="cell">{{ voyagerViews[0].distanceFromSun.km | number:'1.0-0' }} km</div>
-              <div class="cell">{{ voyagerViews[1].distanceFromSun.km | number:'1.0-0' }} km</div>
-            </div>
-            <div class="compare-row">
-              <div class="cell label">Distance Terre</div>
-              <div class="cell">{{ voyagerViews[0].distanceFromEarth.km | number:'1.0-0' }} km</div>
-              <div class="cell">{{ voyagerViews[1].distanceFromEarth.km | number:'1.0-0' }} km</div>
-            </div>
-            <div class="compare-row">
-              <div class="cell label">Vitesse</div>
-              <div class="cell">{{ voyagerViews[0].speed.kmPerS | number:'1.2-2' }} km/s</div>
-              <div class="cell">{{ voyagerViews[1].speed.kmPerS | number:'1.2-2' }} km/s</div>
-            </div>
-            <div class="compare-row">
-              <div class="cell label">Latitude écliptique</div>
-              <div class="cell">{{ voyagerViews[0].trajectory.eclipticLatDeg | number:'1.1-1' }}°</div>
-              <div class="cell">{{ voyagerViews[1].trajectory.eclipticLatDeg | number:'1.1-1' }}°</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="voyager-cards">
-          <div class="voyager-card" *ngFor="let v of voyagerViews">
-          <div class="voyager-card-header">
-            <div class="voyager-name">{{ v.name }}</div>
-            <div class="voyager-id">Horizons ID : {{ v.horizonsId }}</div>
-          </div>
-          <div class="voyager-meta">
-            <span *ngIf="v.referenceFrame">Repère : {{ v.referenceFrame }}</span>
-            <span *ngIf="v.timestamp">Ts : {{ v.timestamp }}</span>
-            <span *ngIf="v.lightTime.oneWayMinutes !== null">
-              Aller radio ~ {{ v.lightTime.oneWayMinutes | number:'1.1-1' }} min
-            </span>
-            <span *ngIf="v.lightTime.twoWayMinutes !== null">
-              RT ~ {{ v.lightTime.twoWayMinutes | number:'1.1-1' }} min
-            </span>
-          </div>
-          <div class="voyager-rows">
-            <div class="voyager-row">
-              <div class="label">Distance Soleil</div>
-              <div class="value">
-                <span *ngIf="v.distanceFromSun.km !== null">{{ v.distanceFromSun.km | number:'1.0-0' }} km</span>
-                <span class="muted" *ngIf="v.distanceFromSun.au !== null"> · {{ v.distanceFromSun.au | number:'1.3-3' }} UA</span>
-              </div>
-            </div>
-            <div class="voyager-row">
-              <div class="label">Distance Terre</div>
-              <div class="value">
-                <span *ngIf="v.distanceFromEarth.km !== null">{{ v.distanceFromEarth.km | number:'1.0-0' }} km</span>
-                <span class="muted" *ngIf="v.distanceFromEarth.au !== null"> · {{ v.distanceFromEarth.au | number:'1.3-3' }} UA</span>
-                <span class="chip subtle" *ngIf="v.distanceFromEarth.lightTimeMin !== null">
-                  Aller radio ≈ {{ v.distanceFromEarth.lightTimeMin | number:'1.1-1' }} min
-                </span>
-              </div>
-            </div>
-            <div class="voyager-row">
-              <div class="label">Aller/retour lumière</div>
-              <div class="value">
-                <span *ngIf="v.lightTime.oneWayMinutes !== null">One-way {{ v.lightTime.oneWayMinutes | number:'1.1-1' }} min</span>
-                <span *ngIf="v.lightTime.twoWayMinutes !== null"> · RT {{ v.lightTime.twoWayMinutes | number:'1.1-1' }} min</span>
-                <span class="muted" *ngIf="v.communication?.rtltSeconds">
-                  (DSN rtlt {{ (v.communication.rtltSeconds / 60) | number:'1.1-1' }} min)
-                </span>
-              </div>
-            </div>
-            <div class="voyager-row">
-              <div class="label">Trajectoire</div>
-              <div class="value trajectory">
-                <span *ngIf="v.trajectory.eclipticLatDeg !== null">Lat écliptique {{ v.trajectory.eclipticLatDeg | number:'1.1-1' }}°</span>
-                <span *ngIf="v.trajectory.eclipticLonDeg !== null"> · Lon {{ v.trajectory.eclipticLonDeg | number:'1.1-1' }}°</span>
-                <span class="chip subtle" *ngIf="v.trajectory.velocityAzimuthDeg !== null">
-                  Cap vitesse {{ v.trajectory.velocityAzimuthDeg | number:'1.0-0' }}°
-                </span>
-                <span class="chip subtle" *ngIf="v.trajectory.velocityLatDeg !== null">
-                  Inclinaison {{ v.trajectory.velocityLatDeg | number:'1.1-1' }}°
-                </span>
-              </div>
-            </div>
-            <div class="voyager-row">
-              <div class="label">Vitesse</div>
-              <div class="value">
-                <span *ngIf="v.speed.kmPerS !== null">{{ v.speed.kmPerS | number:'1.2-2' }} km/s</span>
-                <span class="muted" *ngIf="v.speed.auPerDay !== null"> · {{ v.speed.auPerDay | number:'1.4-4' }} UA/j</span>
-              </div>
-            </div>
-            <div class="voyager-row comm-row">
-              <div class="label">DSN</div>
-              <div class="value" *ngIf="v.communication; else noComm">
-                <div class="comm-line">
-                  <span class="chip">{{ v.communication?.station || 'Station inconnue' }} · {{ v.communication?.dish }}</span>
-                  <span *ngIf="v.communication?.band">Bande {{ v.communication.band }}</span>
-                  <span *ngIf="v.communication?.downlinkRate !== null">{{ v.communication.downlinkRate | number:'1.0-0' }} bps</span>
-                  <span *ngIf="v.communication?.snrDb !== null">Puissance {{ v.communication.snrDb | number:'1.0-1' }} dBm</span>
-                  <span class="muted" *ngIf="v.communication?.activity">({{ v.communication.activity }})</span>
-                </div>
-              </div>
-              <ng-template #noComm>
-                <div class="value muted">Pas de contact actif dans DSN Now.</div>
-              </ng-template>
-            </div>
-          </div>
-          <div class="sparkline-block" *ngIf="v.spark24hPath || v.spark7dPath">
-            <div class="sparkline" *ngIf="v.spark24hPath">
-              <div class="spark-label">Distance (24h)</div>
-              <svg viewBox="0 0 100 30" preserveAspectRatio="none">
-                <path [attr.d]="v.spark24hPath" />
-              </svg>
-            </div>
-            <div class="sparkline" *ngIf="v.spark7dPath">
-              <div class="spark-label">Distance (7 j)</div>
-              <svg viewBox="0 0 100 30" preserveAspectRatio="none">
-                <path [attr.d]="v.spark7dPath" />
-              </svg>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
+  <app-planet-info-panel
+    *ngIf="selectedCatalogBody as body"
+    [body]="body"
+    [kind]="selectedKind"
+    [ephemeris]="$any(selectedEphemeris)"
+    [lighting]="selectedLighting"
+    (close)="onCloseInfo()"
+  ></app-planet-info-panel>
 </div>

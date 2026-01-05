@@ -1,97 +1,166 @@
-<div
-  class="panel"
-  role="dialog"
-  aria-modal="true"
-  [attr.aria-label]="'Données sur ' + planet.displayName"
->
-  <!-- Bouton de fermeture -->
-  <button
-    class="close-btn"
-    type="button"
-    (click)="onClose()"
-    aria-label="Fermer le panneau des informations planète"
-  >
-    ×
-  </button>
+<div class="panel" role="dialog" aria-modal="true" [attr.aria-label]="'Live data - ' + displayName">
+  <button class="close-btn" type="button" (click)="onClose()" aria-label="Close">&times;</button>
 
-  <!-- En-tête : titre + type de planète -->
-  <header class="panel-header">
-    <div class="panel-title-row">
-      <h2>{{ planet.displayName }}</h2>
-
-      <span class="planet-type-chip">{{ planetTypeLabel }}</span>
+  <header class="hdr">
+    <div class="title-row">
+      <span class="live-tag">{{ 'label.live' | t }}</span>
+      <h2>{{ displayName }}</h2>
     </div>
-
-    <div class="panel-subtitle" *ngIf="ephemeris">
-      Éphémérides NASA JPL Horizons · {{ ephemeris.timestamp || 'maintenant' }}
+    <div class="subtitle">
+      {{ ('label.kind.' + kind) | t }} | NASA JPL Horizons | {{ ephemeris?.timestamp || ('label.syncShort' | t) }}
     </div>
   </header>
 
-  <!-- Corps : description + caractéristiques -->
-  <section class="panel-body">
-    <section class="planet-section" aria-label="Données temps réel">
-      <h3>Données temps réel</h3>
+  <section class="body">
+    <div class="desc">{{ body.info }}</div>
 
-      <ng-container *ngIf="ephemeris; else noData">
-        <ul>
-          <li>
-            <span>Distance héliocentrique</span>
-            <span>
-              {{ heliocentricDistanceAu | number: '1.3-3' }} UA
-              <ng-container *ngIf="heliocentricDistanceKm">· {{ heliocentricDistanceKm | number: '1.0-0' }} km</ng-container>
-            </span>
-          </li>
-          <li *ngIf="rangeAu !== null">
-            <span>Distance à la Terre</span>
-            <span>{{ rangeAu | number: '1.3-3' }} UA · {{ rangeKm | number: '1.0-0' }} km</span>
-          </li>
-          <li *ngIf="lightTimeMin !== null">
-            <span>Temps lumière (aller)</span>
-            <span>{{ lightTimeMin | number: '1.1-1' }} min</span>
-          </li>
-          <li *ngIf="solarElongationDeg !== null">
-            <span>Élongation Soleil-Obs-Obj</span>
-            <span>{{ solarElongationDeg | number: '1.1-1' }}°</span>
-          </li>
-          <li *ngIf="phaseAngleDeg !== null">
-            <span>Angle de phase</span>
-            <span>{{ phaseAngleDeg | number: '1.1-1' }}°</span>
-          </li>
-          <li *ngIf="illuminationFraction !== null">
-            <span>Fraction éclairée</span>
-            <span>{{ illuminationFraction | percent: '1.0-1' }}</span>
-          </li>
-          <li *ngIf="apparentMagnitude !== null">
-            <span>Magnitude apparente</span>
-            <span>{{ apparentMagnitude | number: '1.1-2' }}</span>
-          </li>
-          <li *ngIf="speedAuPerDay !== null">
-            <span>Vitesse</span>
-            <span>{{ speedAuPerDay | number: '1.3-3' }} UA/j · {{ speedKmPerS | number: '1.2-2' }} km/s</span>
-          </li>
-          <li>
-            <span>Coordonnées (UA)</span>
-            <span>
-              x={{ ephemeris.x_au | number: '1.3-3' }},
-              y={{ ephemeris.y_au | number: '1.3-3' }},
-              z={{ ephemeris.z_au | number: '1.3-3' }}
-            </span>
-          </li>
-        </ul>
-      </ng-container>
+    <div class="section-title">{{ 'label.catalog' | t }}</div>
+    <ul class="info-list">
+      <li>
+        <span>{{ 'label.radius' | t }}</span>
+        <span>{{ body.radiusKm | number: '1.0-0' }} km</span>
+      </li>
+      <li>
+        <span>{{ 'label.mass' | t }}</span>
+        <span>{{ body.massKg | number: '1.0-0' }} kg</span>
+      </li>
+      <li *ngIf="body.meanSurfaceTempK !== undefined && body.meanSurfaceTempK !== null">
+        <span>{{ 'label.meanTemp' | t }}</span>
+        <span>{{ body.meanSurfaceTempK | number: '1.0-0' }} K</span>
+      </li>
+      <li *ngIf="body.meanDensity !== undefined && body.meanDensity !== null">
+        <span>{{ 'label.meanDensity' | t }}</span>
+        <span>{{ body.meanDensity | number: '1.1-2' }} kg/m3</span>
+      </li>
+      <li *ngIf="body.gravityMs2 !== undefined && body.gravityMs2 !== null">
+        <span>{{ 'label.gravity' | t }}</span>
+        <span>{{ body.gravityMs2 | number: '1.1-2' }} m/s2</span>
+      </li>
+      <li *ngIf="body.escapeVelocityKms !== undefined && body.escapeVelocityKms !== null">
+        <span>{{ 'label.escapeVelocity' | t }}</span>
+        <span>{{ body.escapeVelocityKms | number: '1.1-2' }} km/s</span>
+      </li>
+      <li *ngIf="body.category">
+        <span>{{ 'label.category' | t }}</span>
+        <span>{{ body.category }}</span>
+      </li>
+      <li *ngIf="body.semiMajorAxisAU !== undefined && body.semiMajorAxisAU !== null">
+        <span>{{ 'label.semiMajorAxis' | t }}</span>
+        <span>{{ body.semiMajorAxisAU | number: '1.3-3' }} AU</span>
+      </li>
+      <li *ngIf="body.orbitalPeriodDays !== undefined && body.orbitalPeriodDays !== null">
+        <span>{{ 'label.orbitalPeriod' | t }}</span>
+        <span>{{ body.orbitalPeriodDays | number: '1.1-1' }} j</span>
+      </li>
+      <li *ngIf="body.rotationPeriodHours !== undefined && body.rotationPeriodHours !== null">
+        <span>{{ 'label.rotationPeriod' | t }}</span>
+        <span>{{ body.rotationPeriodHours | number: '1.1-1' }} h</span>
+      </li>
+      <li *ngIf="body.inclinationDeg !== undefined && body.inclinationDeg !== null">
+        <span>{{ 'label.inclination' | t }}</span>
+        <span>{{ body.inclinationDeg | number: '1.1-1' }} deg</span>
+      </li>
+      <li *ngIf="body.axialTiltDeg !== undefined && body.axialTiltDeg !== null">
+        <span>{{ 'label.axialTilt' | t }}</span>
+        <span>{{ body.axialTiltDeg | number: '1.1-1' }} deg</span>
+      </li>
+      <li *ngIf="body.eccentricity !== undefined && body.eccentricity !== null">
+        <span>{{ 'label.eccentricity' | t }}</span>
+        <span>{{ body.eccentricity | number: '1.3-4' }}</span>
+      </li>
+      <li *ngIf="body.moonsCount !== undefined && body.moonsCount !== null">
+        <span>{{ 'label.moonsCount' | t }}</span>
+        <span>{{ body.moonsCount }}</span>
+      </li>
+      <li *ngIf="body.majorMoons?.length">
+        <span>{{ 'label.majorMoons' | t }}</span>
+        <span>{{ body.majorMoons?.join(', ') }}</span>
+      </li>
+      <li *ngIf="body.hasRings !== undefined && body.hasRings !== null">
+        <span>{{ 'label.rings' | t }}</span>
+        <span>{{ body.hasRings ? ('value.yes' | t) : ('value.no' | t) }}</span>
+      </li>
+      <li *ngIf="body.parentPlanetName">
+        <span>{{ 'label.parentPlanet' | t }}</span>
+        <span>{{ body.parentPlanetName }}</span>
+      </li>
+      <li *ngIf="body.horizonsId">
+        <span>{{ 'label.horizonsId' | t }}</span>
+        <span>{{ body.horizonsId }}</span>
+      </li>
+      <li *ngIf="body.referenceUrl">
+        <span>{{ 'label.reference' | t }}</span>
+        <span><a [href]="body.referenceUrl" target="_blank" rel="noreferrer">{{ 'label.source' | t }}</a></span>
+      </li>
+    </ul>
 
-      <ng-template #noData>
-        <p class="planet-summary">
-          Aucune donnée temps réel disponible pour l’instant.
-        </p>
-      </ng-template>
-    </section>
+    <div class="section-title">{{ 'label.ephemeris' | t }}</div>
+    <ng-container *ngIf="ephemeris; else loading">
+      <ul class="info-list">
+        <li>
+          <span>{{ 'label.distanceHelio' | t }}</span>
+          <span>
+            {{ heliocentricDistanceAu | number: '1.3-3' }} AU
+            <ng-container *ngIf="heliocentricDistanceKm !== null"> (~{{ heliocentricDistanceKm | number: '1.0-0' }} km)</ng-container>
+          </span>
+        </li>
+        <li *ngIf="rangeAu !== null">
+          <span>{{ 'label.distanceEarth' | t }}</span>
+          <span>{{ rangeAu | number: '1.3-3' }} AU (~{{ rangeKm | number: '1.0-0' }} km)</span>
+        </li>
+        <li *ngIf="rangeRateKmS !== null">
+          <span>{{ 'label.rangeRate' | t }}</span>
+          <span>{{ rangeRateKmS | number: '1.2-2' }} km/s</span>
+        </li>
+        <li *ngIf="lightTimeMin !== null">
+          <span>{{ 'label.lightTime' | t }}</span>
+          <span>{{ lightTimeMin | number: '1.1-1' }} min</span>
+        </li>
+        <li *ngIf="solarElongationDeg !== null">
+          <span>{{ 'label.solarElongation' | t }}</span>
+          <span>{{ solarElongationDeg | number: '1.1-1' }} deg</span>
+        </li>
+        <li *ngIf="phaseAngleDeg !== null">
+          <span>{{ 'label.phaseAngle' | t }}</span>
+          <span>{{ phaseAngleDeg | number: '1.1-1' }} deg</span>
+        </li>
+        <li *ngIf="illuminationFraction !== null">
+          <span>{{ 'label.illumination' | t }}</span>
+          <span>{{ illuminationFraction | percent: '1.0-1' }}</span>
+        </li>
+        <li *ngIf="apparentMagnitude !== null">
+          <span>{{ 'label.apparentMagnitude' | t }}</span>
+          <span>{{ apparentMagnitude | number: '1.1-2' }}</span>
+        </li>
+        <li *ngIf="speedAuPerDay !== null">
+          <span>{{ 'label.speedVector' | t }}</span>
+          <span>{{ speedAuPerDay | number: '1.3-3' }} AU/j (~{{ speedKmPerS | number: '1.2-2' }} km/s)</span>
+        </li>
+        <li *ngIf="kind === 'planet' && lighting?.subsolarLatitudeDeg !== null">
+          <span>{{ 'label.subsolarLat' | t }}</span>
+          <span>{{ lighting?.subsolarLatitudeDeg | number: '1.1-1' }} deg</span>
+        </li>
+        <li *ngIf="kind === 'planet' && lighting?.northPoleLit !== null">
+          <span>{{ 'label.northPole' | t }}</span>
+          <span>{{ lighting?.northPoleLit ? ('value.lit' | t) : ('value.dark' | t) }}</span>
+        </li>
+        <li *ngIf="kind === 'planet' && lighting?.southPoleLit !== null">
+          <span>{{ 'label.southPole' | t }}</span>
+          <span>{{ lighting?.southPoleLit ? ('value.lit' | t) : ('value.dark' | t) }}</span>
+        </li>
+        <li>
+          <span>{{ 'label.coordsAu' | t }}</span>
+          <span>
+            x={{ ephemeris.x_au | number: '1.3-3' }},
+            y={{ ephemeris.y_au | number: '1.3-3' }},
+            z={{ ephemeris.z_au | number: '1.3-3' }}
+          </span>
+        </li>
+      </ul>
+    </ng-container>
+
+    <ng-template #loading>
+      <div class="loading">{{ 'label.syncLong' | t }}</div>
+    </ng-template>
   </section>
-
-  <!-- Pied de carte : note / source -->
-  <footer class="panel-footer">
-    <p>
-      Affichage 100% éphémérides temps réel (NASA JPL Horizons). Aucune donnée statique locale.
-    </p>
-  </footer>
 </div>

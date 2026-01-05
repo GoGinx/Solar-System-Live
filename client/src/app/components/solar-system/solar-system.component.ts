@@ -1,68 +1,57 @@
+import { Component, HostListener, OnDestroy, OnInit } from '@angular/core';
 import {
-  Component,
-  OnInit,
-  OnDestroy,
-  HostListener
-} from '@angular/core';
-import { Subscription, interval, startWith, switchMap, finalize, Observable } from 'rxjs';
+  Subscription,
+  animationFrames,
+  catchError,
+  distinctUntilChanged,
+  forkJoin,
+  interval,
+  of,
+  sampleTime,
+  startWith,
+  switchMap
+} from 'rxjs';
 
-import {
-  Planet,
-  EphemerisSnapshot,
-  PlanetPosition
-} from '../../models/planet';
-import { PlanetService } from '../../services/planet.service';
+import { BodyEphemerisPayload } from '../../models/body-ephemeris';
+import { Moon } from '../../models/moon';
+import { Planet, PlanetPosition, EphemerisSnapshot } from '../../models/planet';
+import { Star } from '../../models/star';
 import { RealEphemerisService } from '../../services/real-ephemeris.service';
-import { VoyagerService } from '../../services/voyager.service';
-import { VoyagerData, VoyagerSnapshot } from '../../models/voyager';
-import { DsnContact, DsnService } from '../../services/dsn.service';
-
-type ViewMode = '2d' | '3d';
-type PlanetNameType = Planet['name'];
+import { SolarSystemCatalogService } from '../../services/solar-system-catalog.service';
+import { TimeScrubberService } from '../../services/time-scrubber.service';
+import { I18nService } from '../../services/i18n.service';
 
 interface DisplayPlanet {
   planet: Planet;
   x: number;
   y: number;
-  rAu: number;
+  radiusPx: number;
+  textureRotationDeg: number;
+  textureUrl: string;
+  sunDirX: number;
+  sunDirY: number;
+  gradFx: string;
+  gradFy: string;
+  lightColor: string;
+  baseColor: string;
+  darkColor: string;
+  subsolarLatitudeDeg: number | null;
+  northPoleLit: boolean | null;
+  southPoleLit: boolean | null;
   isSelected: boolean;
-  isFocused: boolean;
-  axis?: { x1: number; y1: number; x2: number; y2: number };
-  shadow?: { cx: number; cy: number; rx: number; ry: number };
 }
 
-interface VoyagerMarker {
-  id: VoyagerData['id'];
-  name: string;
+interface DisplaySatellite {
+  moon: Moon;
   x: number;
   y: number;
-  rAu: number;
-  distanceLabel: string;
-  color: string;
+  isSelected: boolean;
 }
 
-interface VoyagerView extends VoyagerData {
-  distanceFromEarth: {
-    au: number | null;
-    km: number | null;
-    miles: number | null;
-    lightTimeMin?: number | null;
-    lightTimeHours?: number | null;
-  };
-  lightTime: Required<NonNullable<VoyagerData['lightTime']>>;
-  trajectory: NonNullable<VoyagerData['trajectory']>;
-  communication?: DsnContact | null;
-  spark24hPath?: string | null;
-  spark7dPath?: string | null;
-}
-
-const MS_PER_DAY = 86_400_000;
-const KM_PER_AU = 149_597_870.7;
-const SPEED_OF_LIGHT_KM_S = 299_792.458;
-const VOYAGER_COLORS: Record<VoyagerData['id'], string> = {
-  voyager1: '#7fe3ff',
-  voyager2: '#ffb347'
-};
+type SelectedBody =
+  | { kind: 'star'; star: Star }
+  | { kind: 'planet'; planet: Planet }
+  | { kind: 'moon'; planet: Planet; moon: Moon };
 
 @Component({
   selector: 'app-solar-system',
@@ -70,1241 +59,785 @@ const VOYAGER_COLORS: Record<VoyagerData['id'], string> = {
   styleUrls: ['./solar-system.component.css']
 })
 export class SolarSystemComponent implements OnInit, OnDestroy {
-  /**
-   * Métadonnées des planètes (rayon, masse, demi-grand axe…).
-   * Fournies par PlanetService (valeurs physiques “moyennes”).
-   */
   planets: Planet[] = [];
-
-  /**
-   * Planète actuellement sélectionnée (pour affichage dans PlanetInfoPanel).
-   */
-  selectedPlanet: Planet | null = null;
-  selectedEphemeris: PlanetPosition | null = null;
-
-  /**
-   * Données projetées sur l’écran (positions en pixels) dérivées
-   * des éphémérides réelles fournies par le backend.
-   */
   displayPlanets: DisplayPlanet[] = [];
 
-  /**
-   * Dimensions logiques du SVG (viewBox).
-   * Elles peuvent être ajustées sur resize pour rester responsives.
-   */
+  star: Star | null = null;
+  focusedPlanet: Planet | null = null;
+  displaySatellites: DisplaySatellite[] = [];
+
+  selected: SelectedBody | null = null;
+  selectedEphemeris: PlanetPosition | BodyEphemerisPayload | null = null;
+
   width = 800;
   height = 800;
-  centerX = this.width / 2;
-  centerY = this.height / 2;
+  centerX = 400;
+  centerY = 400;
 
-  /**
-   * Mode de vue : 2D (vue du dessus) ou 3D (projection oblique).
-   * Ne modifie que la projection, pas les coordonnées physiques (X,Y,Z).
-   */
-  viewMode: ViewMode = '2d';
-
-  /**
-   * Timelapse : décalage temporel (en jours) appliqué aux éphémérides reçues.
-   * Un slider permet d’avancer/reculer d’un an, avec des pas jour/semaine/mois.
-   */
-  timeOffsetDays = 0;
-  readonly maxTimeOffsetDays = 365;
-  timeStepDays = 1;
-
-  /**
-   * Options d’affichage avancées en vue 3D.
-   */
-  showOrbitalPlanes = true;
-  showPlanetAxes = true;
-  showShadows = true;
-
-  /**
-   * Angle de caméra utilisé en projection 3D (rotation dans le plan Y–Z).
-   */
-  cameraAngleRad = Math.PI / 6; // ≈ 30°
-
-  /**
-   * Longueur (en pixels) correspondant à 1 UA dans l’échelle radiale compressée.
-   * Affichée dans la barre d’échelle.
-   */
-  oneAuPixels = 0;
-
-  /**
-   * Valeur max du demi-grand axe (en UA) parmi les planètes.
-   * Sert de référence pour compresser l’échelle radiale (Neptune ~ max).
-   */
-  private maxSemiMajorAxisAu = 30.1; // valeur par défaut, réajustée en ngOnInit
-  focusPlanetName: PlanetNameType | null = null;
-
-  /**
-   * Dernier snapshot d’éphémérides reçu (positions réelles).
-   * Permet de recalculer l’affichage sur changement de mode ou resize
-   * sans réinterroger le backend.
-   */
+  private maxSemiMajorAxisAu = 30.1;
   private lastSnapshot: EphemerisSnapshot | null = null;
-  metadata: EphemerisSnapshot['metadata'] | null = null;
-  private snapshotReceivedAt: number | null = null;
-  private lastLatencyTimestamp: string | null = null;
-  autoRefreshEnabled = true;
-  readonly refreshIntervalMs = 60_000;
-  lastCacheStatus: 'HIT' | 'MISS' | 'STALE' | 'FROZEN' | null = null;
-  lastCacheBackend: 'memory' | 'redis' | null = null;
-  cacheAgeMs: number | null = null;
-  cacheTtlMs: number | null = null;
-  currentLatencyMs: number | null = null;
-  frozenSnapshot = false;
-  freezeReason: string | null = null;
-  lastRequestId: string | null = null;
-  lastVoyagerRequestId: string | null = null;
-  lastVoyagerTimestamp: string | null = null;
-  voyagers: VoyagerData[] = [];
-  voyagerViews: VoyagerView[] = [];
-  voyagerError: string | null = null;
-  voyagerLoading = false;
-  voyagerMarkers: VoyagerMarker[] = [];
-  copyStatus: 'idle' | 'success' | 'error' = 'idle';
-  copyMessage: string | null = null;
-  private voyagerSub?: Subscription;
-  dsnContacts: DsnContact[] = [];
-  dsnError: string | null = null;
-  private dsnSub?: Subscription;
+  private sub?: Subscription;
+  private catalogSub?: Subscription;
+  private sunSub?: Subscription;
+  private moonsSub?: Subscription;
+  private timeSub?: Subscription;
+  private frameSub?: Subscription;
+  private offsetDays = 0;
+  private nowMs = Date.now();
+  private sunEphemerisRaw: BodyEphemerisPayload | null = null;
 
-  /**
-   * Abonnement au flux de mise à jour périodique des éphémérides.
-   */
-  private ephemerisSub?: Subscription;
-  private animationFrameId: number | null = null;
-  enableInertialPlayback = true;
-  private readonly msPerDay = 86_400_000;
-  private latencySumMs = 0;
-  private latencyCount = 0;
-  private lastPanX = 0;
-  private lastPanY = 0;
+  private readonly moonEphemerides = new Map<string, BodyEphemerisPayload>();
+  private readonly planetStyleCache = new Map<
+    string,
+    { textureUrl: string; lightColor: string; baseColor: string; darkColor: string }
+  >();
 
-  /**
-   * Indicateur de chargement (optionnel, au cas où tu veux l’exploiter dans le template).
-   */
-  isLoading = false;
-
-  /**
-   * Message d’erreur éventuel lors de l’appel au backend.
-   */
-  errorMessage: string | null = null;
-
-  /**
-   * Timestamp de la dernière mise à jour (vient du backend).
-   */
-  lastUpdateTimestamp: string | null = null;
+  readonly refreshIntervalMs = 5_000;
+  readonly selectedPlanetScale = 2.1;
+  private readonly rotationEpochMs = Date.UTC(2025, 0, 1);
+  private readonly orbitEpochMs = Date.UTC(2025, 0, 1);
+  private readonly textureByPlanet: Record<Planet['name'], string> = {
+    mercury: 'assets/textures/mercury.png',
+    venus: 'assets/textures/venus.png',
+    earth: 'assets/textures/earth.png',
+    mars: 'assets/textures/mars.png',
+    jupiter: 'assets/textures/jupiter.png',
+    saturn: 'assets/textures/saturn.png',
+    uranus: 'assets/textures/uranus.png',
+    neptune: 'assets/textures/neptune.png',
+    pluto: 'assets/textures/pluto.png'
+  };
 
   constructor(
-    private planetService: PlanetService,
+    private catalog: SolarSystemCatalogService,
     private ephemerisService: RealEphemerisService,
-    private voyagerService: VoyagerService,
-    private dsnService: DsnService
+    private time: TimeScrubberService,
+    private i18n: I18nService
   ) {}
 
-  // ---------------------------------------------------------------------------
-  // Cycle de vie
-  // ---------------------------------------------------------------------------
+  trackByPlanetName(_: number, dp: DisplayPlanet): string {
+    return dp.planet.name;
+  }
+
+  trackByMoonId(_: number, s: DisplaySatellite): string {
+    return s.moon.id;
+  }
+
+  private isSelectedPlanet(
+    selected: SelectedBody | null
+  ): selected is { kind: 'planet'; planet: Planet } {
+    return !!selected && selected.kind === 'planet';
+  }
+
+  private isSelectedMoon(
+    selected: SelectedBody | null
+  ): selected is { kind: 'moon'; planet: Planet; moon: Moon } {
+    return !!selected && selected.kind === 'moon';
+  }
+
+  private isSelectedStar(
+    selected: SelectedBody | null
+  ): selected is { kind: 'star'; star: Star } {
+    return !!selected && selected.kind === 'star';
+  }
 
   ngOnInit(): void {
-    this.planets = this.planetService.getPlanets();
+    this.catalogSub = this.i18n.lang$
+      .pipe(
+        distinctUntilChanged(),
+        switchMap((lang) => this.catalog.getCatalog(lang))
+      )
+      .subscribe({
+        next: (c) => {
+          this.star = c.star ?? null;
+          this.planets = c.planets ?? [];
+          if (this.focusedPlanet) {
+            this.focusedPlanet = this.planets.find((p) => p.name === this.focusedPlanet?.name) ?? null;
+          }
+          const selected = this.selected;
+          if (this.isSelectedPlanet(selected)) {
+            const updated = this.planets.find((p) => p.name === selected.planet.name);
+            if (updated) {
+              this.selected = { kind: 'planet', planet: updated };
+            }
+          } else if (this.isSelectedMoon(selected)) {
+            const parent = this.planets.find((p) => p.name === selected.planet.name);
+            const moon = parent?.moons?.find((m) => m.id === selected.moon.id);
+            if (parent && moon) {
+              this.selected = { kind: 'moon', planet: parent, moon };
+            }
+          } else if (this.isSelectedStar(selected) && this.star) {
+            this.selected = { kind: 'star', star: this.star };
+          }
+          this.maxSemiMajorAxisAu =
+            this.planets.reduce((max, p) => (p.semiMajorAxisAU > max ? p.semiMajorAxisAU : max), 0) ||
+            30.1;
+          this.rebuildPlanetStyleCache();
+          this.refreshDisplay();
+          this.refreshSatellitesDisplay();
+        },
+        error: () => {
+          // Fallback: le composant peut fonctionner sans catalogue.
+        }
+      });
 
-    // Détermine le plus grand demi-grand axe pour l’échelle
-    this.maxSemiMajorAxisAu =
-      this.planets.reduce(
-        (max, p) => (p.semiMajorAxisAU > max ? p.semiMajorAxisAU : max),
-        0
-      ) || 30.1;
-
-    // Initialisation des dimensions (responsive basique)
     this.updateDimensionsFromWindow();
-    this.oneAuPixels = this.distanceToPixels(1);
+    this.startPolling();
+    this.startAnimationLoop();
 
-    this.startAutoRefresh();
-    this.startVoyagerAutoRefresh();
-    this.startDsnAutoRefresh();
+    this.timeSub = this.time.offsetDays$.subscribe((days) => {
+      this.offsetDays = days;
+      this.refreshDisplay();
+      this.refreshSelectedEphemeris();
+      this.refreshSatellitesDisplay();
+    });
   }
 
   ngOnDestroy(): void {
-    this.stopAutoRefresh();
-    this.stopInertialAnimation();
-    this.stopVoyagerAutoRefresh();
-    this.stopDsnAutoRefresh();
+    this.sub?.unsubscribe();
+    this.sub = undefined;
+    this.catalogSub?.unsubscribe();
+    this.catalogSub = undefined;
+    this.sunSub?.unsubscribe();
+    this.sunSub = undefined;
+    this.moonsSub?.unsubscribe();
+    this.moonsSub = undefined;
+    this.timeSub?.unsubscribe();
+    this.timeSub = undefined;
+    this.frameSub?.unsubscribe();
+    this.frameSub = undefined;
   }
-
-  // ---------------------------------------------------------------------------
-  // Rafraîchissement / appels API
-  // ---------------------------------------------------------------------------
-
-  private fetchSnapshot(options?: { forceRefresh?: boolean }): Observable<EphemerisSnapshot> {
-    this.isLoading = true;
-    this.errorMessage = null;
-
-    return this.ephemerisService
-      .getCurrentPlanetPositions(options)
-      .pipe(finalize(() => (this.isLoading = false)));
-  }
-
-  private handleSnapshot(snapshot: EphemerisSnapshot): void {
-    this.errorMessage = null;
-    this.lastSnapshot = snapshot;
-    this.snapshotReceivedAt = Date.now();
-    this.metadata = snapshot.metadata ?? null;
-    this.lastUpdateTimestamp = snapshot.timestamp || new Date().toISOString();
-    this.frozenSnapshot = !!snapshot.metadata?.frozenSnapshot;
-    this.freezeReason = snapshot.metadata?.freezeReason ?? null;
-    this.lastRequestId = snapshot.metadata?.requestId ?? null;
-    this.trackLatency(snapshot);
-    this.trackCache(snapshot);
-    this.updateDisplayFromSnapshot(snapshot);
-    this.startInertialAnimation();
-    this.refreshSelectedEphemeris();
-    this.enrichVoyagerViews();
-  }
-
-  private handleSnapshotError(err: unknown): void {
-    console.error('Erreur éphémérides:', err);
-    this.errorMessage =
-      'Erreur lors de la récupération des positions réelles des planètes.';
-    if (this.lastSnapshot) {
-      this.frozenSnapshot = true;
-      this.freezeReason = 'Dernière réponse Horizons indisponible. Données précédentes affichées.';
-    }
-  }
-
-  private fetchVoyagers(): Observable<VoyagerSnapshot> {
-    this.voyagerLoading = true;
-    this.voyagerError = null;
-    return this.voyagerService.getVoyagers().pipe(finalize(() => (this.voyagerLoading = false)));
-  }
-
-  private handleVoyagers(snapshot: VoyagerSnapshot): void {
-    this.voyagerError = null;
-    this.voyagers = snapshot.voyagers ?? [];
-    this.lastVoyagerRequestId = snapshot.requestId ?? this.lastVoyagerRequestId;
-    this.lastRequestId = snapshot.requestId ?? this.lastRequestId;
-    this.lastVoyagerTimestamp = snapshot.timestamp ?? this.lastVoyagerTimestamp;
-    this.enrichVoyagerViews();
-  }
-
-  private handleVoyagerError(err: unknown): void {
-    console.error('Erreur Voyager:', err);
-    this.voyagerError = 'Impossible de récupérer les données Voyager pour le moment.';
-  }
-
-  private startAutoRefresh(): void {
-    this.stopAutoRefresh();
-    this.autoRefreshEnabled = true;
-
-    this.ephemerisSub = interval(this.refreshIntervalMs)
-      .pipe(
-        startWith(0),
-        switchMap(() => this.fetchSnapshot())
-      )
-      .subscribe({
-        next: (snapshot) => this.handleSnapshot(snapshot),
-        error: (err) => this.handleSnapshotError(err)
-      });
-  }
-
-  private stopAutoRefresh(): void {
-    this.ephemerisSub?.unsubscribe();
-    this.ephemerisSub = undefined;
-  }
-
-  private startVoyagerAutoRefresh(): void {
-    this.stopVoyagerAutoRefresh();
-    this.voyagerSub = interval(this.refreshIntervalMs * 5)
-      .pipe(
-        startWith(0),
-        switchMap(() => this.fetchVoyagers())
-      )
-      .subscribe({
-        next: (snapshot) => this.handleVoyagers(snapshot),
-        error: (err) => this.handleVoyagerError(err)
-      });
-  }
-
-  private stopVoyagerAutoRefresh(): void {
-    this.voyagerSub?.unsubscribe();
-    this.voyagerSub = undefined;
-  }
-
-  private startDsnAutoRefresh(): void {
-    this.stopDsnAutoRefresh();
-    this.dsnSub = interval(this.refreshIntervalMs * 5)
-      .pipe(
-        startWith(0),
-        switchMap(() => this.dsnService.getContacts())
-      )
-      .subscribe({
-        next: (contacts) => {
-          this.dsnError = null;
-          this.dsnContacts = contacts;
-          this.enrichVoyagerViews();
-        },
-        error: (err) => {
-          console.error('Erreur DSN:', err);
-          this.dsnError = 'Statut DSN indisponible pour le moment.';
-        }
-      });
-  }
-
-  private stopDsnAutoRefresh(): void {
-    this.dsnSub?.unsubscribe();
-    this.dsnSub = undefined;
-  }
-
-  toggleAutoRefresh(): void {
-    if (this.autoRefreshEnabled) {
-      this.autoRefreshEnabled = false;
-      this.stopAutoRefresh();
-    } else {
-      this.startAutoRefresh();
-    }
-  }
-
-  triggerManualRefresh(forceNetwork = false): void {
-    this.fetchSnapshot({ forceRefresh: forceNetwork }).subscribe({
-      next: (snapshot) => this.handleSnapshot(snapshot),
-      error: (err) => this.handleSnapshotError(err)
-    });
-
-    // Rafraîchit aussi les données Voyager pour garder la cohérence temporelle
-    this.fetchVoyagers().subscribe({
-      next: (snapshot) => this.handleVoyagers(snapshot),
-      error: (err) => this.handleVoyagerError(err)
-    });
-
-    this.dsnService.getContacts().subscribe({
-      next: (contacts) => {
-        this.dsnContacts = contacts;
-        this.dsnError = null;
-        this.enrichVoyagerViews();
-      },
-      error: (err) => {
-        console.error('Erreur DSN:', err);
-        this.dsnError = 'Statut DSN indisponible pour le moment.';
-      }
-    });
-  }
-
-  // ---------------------------------------------------------------------------
-  // Gestion de la fenêtre (responsivité)
-  // ---------------------------------------------------------------------------
 
   @HostListener('window:resize')
-  onWindowResize(): void {
+  onResize(): void {
     this.updateDimensionsFromWindow();
-    this.oneAuPixels = this.distanceToPixels(1);
-
-    // Si on a déjà des données d’éphémérides, on recalcule les positions
-    if (this.lastSnapshot) {
-      this.updateDisplayFromSnapshot(this.lastSnapshot);
-    }
+    this.refreshDisplay();
+    this.refreshSatellitesDisplay();
   }
 
-  /**
-   * Ajuste la largeur/hauteur du SVG en fonction de la taille de la fenêtre,
-   * en gardant un canvas carré centré et une marge raisonnable.
-   */
   private updateDimensionsFromWindow(): void {
-    const viewportWidth = window.innerWidth || 1024;
-    const maxSvg = 800;
-
-    // Petite marge latérale pour ne pas coller au bord de la fenêtre
-    const targetWidth = Math.min(viewportWidth - 64, maxSvg);
-
-    this.width = targetWidth > 320 ? targetWidth : 320;
-    this.height = this.width; // carré
-
+    this.width = Math.max(320, window.innerWidth);
+    this.height = Math.max(320, window.innerHeight);
     this.centerX = this.width / 2;
     this.centerY = this.height / 2;
   }
 
-  // ---------------------------------------------------------------------------
-  // Échelle & projection
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Conversion d’une distance en UA vers une distance en pixels,
-   * en utilisant une compression radiale (sqrt) pour garder les planètes
-   * externes visibles dans le même cadre.
-   */
-  private distanceToPixels(au: number): number {
-    if (au <= 0) {
-      return 0;
-    }
-
-    const maxRadiusPx = Math.min(this.width, this.height) / 2 - 40;
-    const focus = this.focusPlanetName
-      ? this.planets.find(p => p.name === this.focusPlanetName)?.semiMajorAxisAU
-      : undefined;
-    const effectiveMaxAu = focus ? Math.max(focus * 1.6, 0.5) : this.maxSemiMajorAxisAu;
-    const maxAu = effectiveMaxAu || 30.1;
-
-    // Compression radiale : sqrt(au / maxAu) * rayon_max
-    const normalized = Math.sqrt(au / maxAu);
-    return normalized * maxRadiusPx;
+  private startPolling(): void {
+    this.sub?.unsubscribe();
+    this.sub = interval(this.refreshIntervalMs)
+      .pipe(
+        startWith(0),
+        switchMap(() =>
+          this.ephemerisService
+            .getCurrentPlanetPositions({ fullSnapshot: true, forceRefresh: true })
+            .pipe(catchError(() => of(null)))
+        )
+      )
+      .subscribe({
+        next: (snapshot) => {
+          if (!snapshot) return;
+          this.lastSnapshot = snapshot;
+          this.refreshDisplay();
+          this.refreshSelectedEphemeris();
+          this.refreshSatellitesDisplay();
+        },
+        error: () => {
+          // On garde la derniere carte affichee si l'API tombe.
+        }
+      });
   }
 
-  /**
-   * Rayon visuel des planètes en pixels (tres compressé pour les géantes).
-   * Ici, on reste arbitraire sur le "style", mais toujours déterministe.
-   */
-  planetRadiusToPixels(planet: Planet): number {
-    const base = 4;
-    const scale = 0.0005;
-    return base + planet.radiusKm * scale;
+  private startAnimationLoop(): void {
+    this.frameSub?.unsubscribe();
+    this.frameSub = animationFrames()
+      .pipe(sampleTime(33))
+      .subscribe(() => {
+        this.nowMs = Date.now();
+        this.refreshDisplay();
+        this.refreshSelectedEphemeris();
+        this.refreshSatellitesDisplay();
+      });
   }
 
-  /**
-   * Rayon visuel des orbites, basé directement sur le demi-grand axe en UA.
-   */
+  onSunClick(): void {
+    if (!this.star) return;
+    this.focusedPlanet = null;
+    this.displaySatellites = [];
+    this.moonEphemerides.clear();
+    this.moonsSub?.unsubscribe();
+    this.moonsSub = undefined;
+    this.sunEphemerisRaw = null;
+
+    this.selected = { kind: 'star', star: this.star };
+    this.displayPlanets = this.displayPlanets.map((dp) => ({ ...dp, isSelected: false }));
+    this.selectedEphemeris = null;
+    this.startSunPolling();
+  }
+
+  onPlanetClick(planet: Planet): void {
+    this.stopSunPolling();
+    this.focusedPlanet = planet;
+    this.selected = { kind: 'planet', planet };
+    this.selectedEphemeris = null;
+    this.refreshSelectedEphemeris();
+    this.startMoonsPollingForFocusedPlanet();
+
+    this.displayPlanets = this.displayPlanets.map((dp) => ({
+      ...dp,
+      isSelected: dp.planet.name === planet.name
+    }));
+  }
+
+  onMoonClick(moon: Moon): void {
+    if (!this.focusedPlanet) return;
+    this.stopSunPolling();
+    this.selected = { kind: 'moon', planet: this.focusedPlanet, moon };
+    this.refreshSelectedEphemeris();
+    this.refreshSatellitesDisplay();
+  }
+
+  onCloseInfo(): void {
+    this.selected = null;
+    this.selectedEphemeris = null;
+    this.focusedPlanet = null;
+    this.displaySatellites = [];
+    this.moonEphemerides.clear();
+    this.sunEphemerisRaw = null;
+    this.stopSunPolling();
+    this.moonsSub?.unsubscribe();
+    this.moonsSub = undefined;
+    this.displayPlanets = this.displayPlanets.map((dp) => ({ ...dp, isSelected: false }));
+  }
+
+  get selectedCatalogBody(): Planet | Moon | Star | null {
+    if (!this.selected) return null;
+    if (this.selected.kind === 'planet') return this.selected.planet;
+    if (this.selected.kind === 'moon') return this.selected.moon;
+    return this.selected.star;
+  }
+
+  get selectedKind(): SelectedBody['kind'] {
+    return this.selected?.kind ?? 'planet';
+  }
+
+  get selectedDisplayPlanet(): DisplayPlanet | null {
+    const selected = this.selected;
+    if (!selected || selected.kind === 'star') return null;
+    return this.displayPlanets.find((dp) => dp.planet.name === selected.planet.name) ?? null;
+  }
+
+  get selectedLighting(): { subsolarLatitudeDeg: number | null; northPoleLit: boolean | null; southPoleLit: boolean | null } | null {
+    if (this.selected?.kind !== 'planet') return null;
+    const dp = this.selectedDisplayPlanet;
+    if (!dp) return null;
+    return {
+      subsolarLatitudeDeg: dp.subsolarLatitudeDeg,
+      northPoleLit: dp.northPoleLit,
+      southPoleLit: dp.southPoleLit
+    };
+  }
+
   getOrbitRadiusPx(planet: Planet): number {
     return this.distanceToPixels(planet.semiMajorAxisAU);
   }
 
-  /**
-   * Changement de mode de vue (2D vs 3D).
-   * On ne change que la projection, pas les données physiques.
-   */
-  setViewMode(mode: ViewMode): void {
-    if (this.viewMode === mode) {
-      return;
-    }
-    this.viewMode = mode;
-
-    // Si on dispose déjà d’un snapshot, on recalcule l’affichage
-    if (this.lastSnapshot) {
-      this.updateDisplayFromSnapshot(this.lastSnapshot);
-    }
+  planetRadiusToPixels(planet: Planet): number {
+    const minPx = 3.2;
+    const maxPx = 14;
+    const log = Math.log10(planet.radiusKm);
+    const logMin = Math.log10(1188.3); // Pluton
+    const logMax = Math.log10(69911); // Jupiter
+    const t = (log - logMin) / (logMax - logMin);
+    return minPx + Math.max(0, Math.min(1, t)) * (maxPx - minPx);
   }
 
-  /**
-   * Ajuste le pas du slider (1j / 7j / 30j).
-   */
-  setTimeStep(days: number): void {
-    this.timeStepDays = days;
+  private distanceToPixels(distanceAu: number): number {
+    const maxRadiusPx = Math.min(this.width, this.height) / 2 - 40;
+    const clamped = Math.max(0, Math.min(distanceAu, this.maxSemiMajorAxisAu));
+    const normalized =
+      Math.log10(1 + clamped) / Math.log10(1 + Math.max(1e-6, this.maxSemiMajorAxisAu));
+    return normalized * maxRadiusPx;
   }
 
-  /**
-   * Mise à jour du décalage temporel via le slider.
-   */
-  onTimeOffsetChange(event: Event): void {
-    const value = Number((event.target as HTMLInputElement).value);
-    this.timeOffsetDays = Number.isFinite(value) ? value : 0;
-
-    this.refreshDisplay();
-  }
-
-  /**
-   * Réinitialise le décalage temporel (retour à l’horodatage réel).
-   */
-  resetTimeOffset(): void {
-    this.timeOffsetDays = 0;
-    this.refreshDisplay();
-  }
-
-  // ---------------------------------------------------------------------------
-  // Rendu à partir des éphémérides réelles
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Met à jour les positions affichées à partir d’un snapshot d’éphémérides.
-   * Les coordonnées (x, y, z) sont interprétées comme héliocentriques en UA.
-   */
-  private updateDisplayFromSnapshot(snapshot: EphemerisSnapshot): void {
-    if (!snapshot || !snapshot.bodies || snapshot.bodies.length === 0) {
-      this.displayPlanets = [];
-      this.voyagerMarkers = [];
-      return;
-    }
-
-    const positionsByName = new Map<string, PlanetPosition>();
-    for (const body of snapshot.bodies) {
-      positionsByName.set(body.name, body);
-    }
-
-    let display: DisplayPlanet[] = [];
-    const deltaDays = this.timeOffsetDays + this.computeDriftDays(snapshot);
-
-    for (const planet of this.planets) {
-      const pos = positionsByName.get(planet.name);
-      if (!pos) {
-        continue;
-      }
-
-      const { x: xOrbit, y: yOrbit, z: zOrbitRaw } = this.computePositionWithOffset(
-        pos,
-        planet,
-        deltaDays
-      );
-      let zOrbit = zOrbitRaw;
-      const baseRadiusAu =
-        Math.sqrt(
-          xOrbit * xOrbit +
-            yOrbit * yOrbit +
-            zOrbit * zOrbit
-        ) || planet.semiMajorAxisAU || 1e-6;
-
-      if (!this.hasVelocity(pos)) {
-        const incRad = (planet.inclinationDeg || 0) * Math.PI / 180;
-        const angle = Math.atan2(yOrbit, xOrbit);
-        const tiltRadius = Math.max(baseRadiusAu, planet.semiMajorAxisAU || baseRadiusAu);
-        zOrbit += tiltRadius * Math.sin(incRad) * Math.sin(angle);
-      }
-
-      const rAu =
-        Math.sqrt(
-          xOrbit * xOrbit +
-            yOrbit * yOrbit +
-            zOrbit * zOrbit
-        ) || planet.semiMajorAxisAU || 1e-6;
-      const rPx = this.distanceToPixels(rAu);
-      const scale = rPx / rAu || 1;
-      const planetRadiusPx = this.planetRadiusToPixels(planet);
-
-      let xScreen: number;
-      let yScreen: number;
-
-      if (this.viewMode === '2d') {
-        // Vue du dessus : projection dans le plan (x, y)
-        xScreen = this.centerX + xOrbit * scale;
-        yScreen = this.centerY + yOrbit * scale;
-      } else {
-        // Vue pseudo-3D : même position physique (x, y, z),
-        // projection oblique autour de l’axe X.
-        const projected = this.project3dPoint(xOrbit, yOrbit, zOrbit, scale);
-        xScreen = projected.x;
-        yScreen = projected.y;
-      }
-
-      // Axe planétaire (vue 3D uniquement)
-      let axis: DisplayPlanet['axis'];
-      if (this.viewMode === '3d' && this.showPlanetAxes) {
-        const tiltRad = (planet.axialTiltDeg || 0) * Math.PI / 180;
-        const axisHalfPx = planetRadiusPx * 1.5;
-        const axisHalfAu = axisHalfPx / (scale || 1);
-
-        const axisY = Math.sin(tiltRad) * axisHalfAu;
-        const axisZ = Math.cos(tiltRad) * axisHalfAu;
-
-        const start = this.project3dPoint(xOrbit, yOrbit - axisY, zOrbit - axisZ, scale);
-        const end = this.project3dPoint(xOrbit, yOrbit + axisY, zOrbit + axisZ, scale);
-
-        axis = { x1: start.x, y1: start.y, x2: end.x, y2: end.y };
-      }
-
-      // Ombre portée simple (ellipse aplatie sous la planète)
-      let shadow: DisplayPlanet['shadow'];
-      if (this.viewMode === '3d' && this.showShadows) {
-        shadow = {
-          cx: xScreen,
-          cy: yScreen + planetRadiusPx * 0.6,
-          rx: planetRadiusPx * 1.4,
-          ry: planetRadiusPx * 0.65
-        };
-      }
-
-      display.push({
-        planet,
-        x: xScreen,
-        y: yScreen,
-        rAu,
-        isSelected: !!this.selectedPlanet && this.selectedPlanet.name === planet.name,
-        isFocused: this.focusPlanetName === planet.name,
-        axis,
-        shadow
-      });
-    }
-
-    // Optionnel : recalcule l'échelle 1 UA (utile après focus)
-    this.oneAuPixels = this.distanceToPixels(1);
-
-    let panX = 0;
-    let panY = 0;
-
-    // Si on doit centrer sur une planète, calcule un décalage global
-    if (this.focusPlanetName) {
-      const focused = display.find(dp => dp.planet.name === this.focusPlanetName);
-      if (focused) {
-        panX = this.centerX - focused.x;
-        panY = this.centerY - focused.y;
-
-        display = display.map(dp => ({
-          ...dp,
-          x: dp.x + panX,
-          y: dp.y + panY,
-          axis: dp.axis
-            ? {
-                x1: dp.axis.x1 + panX,
-                y1: dp.axis.y1 + panY,
-                x2: dp.axis.x2 + panX,
-                y2: dp.axis.y2 + panY
-              }
-            : undefined,
-          shadow: dp.shadow
-            ? {
-                ...dp.shadow,
-                cx: dp.shadow.cx + panX,
-                cy: dp.shadow.cy + panY
-              }
-            : undefined
-        }));
-      }
-    }
-
-    this.displayPlanets = display;
-    this.lastPanX = panX;
-    this.lastPanY = panY;
-    this.voyagerMarkers = this.buildVoyagerMarkers(deltaDays, panX, panY);
-  }
-
-  /**
-   * Bascule des options d’affichage en vue 3D.
-   */
-  onToggleOrbitPlanes(checked: boolean): void {
-    this.showOrbitalPlanes = checked;
-    this.refreshDisplay();
-  }
-
-  onTogglePlanetAxes(checked: boolean): void {
-    this.showPlanetAxes = checked;
-    this.refreshDisplay();
-  }
-
-  onToggleShadows(checked: boolean): void {
-    this.showShadows = checked;
-    this.refreshDisplay();
-  }
-
-  /**
-   * Recalcule l’affichage depuis le dernier snapshot si disponible.
-   */
   private refreshDisplay(): void {
-    if (this.lastSnapshot) {
-      this.updateDisplayFromSnapshot(this.lastSnapshot);
-    }
-  }
-
-  /**
-   * Compression visuelle des plans orbitaux en vue 3D.
-   */
-  orbitPlaneCompression(planet: Planet): number {
-    const incRad = (planet.inclinationDeg || 0) * Math.PI / 180;
-    const base = Math.cos(this.cameraAngleRad);
-    const tilt = Math.cos(incRad);
-    return Math.max(0.2, base * tilt);
-  }
-
-  /**
-   * Projection oblique d’un point 3D (en UA) vers l’écran (px).
-   */
-  private project3dPoint(xAu: number, yAu: number, zAu: number, scale: number): { x: number; y: number } {
-    const x = xAu * scale;
-    const y = yAu * scale;
-    const z = zAu * scale;
-    const phi = this.cameraAngleRad;
-    const yProj = y * Math.cos(phi) - z * Math.sin(phi);
-
-    return {
-      x: this.centerX + x,
-      y: this.centerY + yProj
-    };
-  }
-
-  // ---------------------------------------------------------------------------
-  // Lecture inertielle & interpolation temporelle
-  // ---------------------------------------------------------------------------
-
-  onToggleInertialPlayback(checked: boolean): void {
-    this.enableInertialPlayback = checked;
-    if (checked) {
-      this.startInertialAnimation();
-      this.refreshDisplay();
-    } else {
-      this.stopInertialAnimation();
-    }
-  }
-
-  private startInertialAnimation(): void {
-    if (!this.enableInertialPlayback || this.animationFrameId !== null) {
-      return;
-    }
-
-    const tick = () => {
-      this.animationFrameId = null;
-      if (this.enableInertialPlayback) {
-        this.refreshDisplay();
-        this.animationFrameId = requestAnimationFrame(tick);
+    const positions = new Map<string, PlanetPosition>();
+    if (this.lastSnapshot?.bodies?.length) {
+      for (const b of this.lastSnapshot.bodies) {
+        positions.set(b.name, b);
       }
-    };
-
-    this.animationFrameId = requestAnimationFrame(tick);
-  }
-
-  private stopInertialAnimation(): void {
-    if (this.animationFrameId !== null) {
-      cancelAnimationFrame(this.animationFrameId);
-      this.animationFrameId = null;
-    }
-  }
-
-  private trackLatency(snapshot: EphemerisSnapshot): void {
-    if (this.lastLatencyTimestamp === snapshot.timestamp) {
-      return;
-    }
-    const latency = snapshot.metadata?.responseTimeMs;
-    if (latency !== undefined && Number.isFinite(latency)) {
-      this.latencySumMs += latency;
-      this.latencyCount += 1;
-      this.lastLatencyTimestamp = snapshot.timestamp;
-      this.currentLatencyMs = latency;
-    }
-  }
-
-  private trackCache(snapshot: EphemerisSnapshot): void {
-    const meta = snapshot.metadata;
-    if (!meta) {
-      return;
     }
 
-    this.lastCacheStatus =
-      (meta.cacheStatus as typeof this.lastCacheStatus) ?? this.lastCacheStatus;
-    this.lastCacheBackend =
-      (meta.cacheBackend as typeof this.lastCacheBackend) ?? this.lastCacheBackend;
+    this.displayPlanets = this.planets.map((planet, idx) => {
+      const style = this.getPlanetStyle(planet);
+      const fallback = this.computeFallbackOrbitPosition(planet, idx);
+      let vec = fallback;
 
-    this.cacheAgeMs =
-      meta.cacheAgeMs !== undefined && Number.isFinite(meta.cacheAgeMs)
-        ? meta.cacheAgeMs
-        : this.cacheAgeMs;
-
-    this.cacheTtlMs =
-      meta.cacheExpiresInMs !== undefined && Number.isFinite(meta.cacheExpiresInMs)
-        ? meta.cacheExpiresInMs
-        : this.cacheTtlMs;
-
-    if (meta.responseTimeMs !== undefined && Number.isFinite(meta.responseTimeMs)) {
-      this.currentLatencyMs = meta.responseTimeMs;
-    }
-
-    if (meta.frozenSnapshot) {
-      this.frozenSnapshot = true;
-      this.freezeReason = meta.freezeReason ?? this.freezeReason;
-    } else {
-      this.frozenSnapshot = false;
-      this.freezeReason = null;
-    }
-
-    if (meta.requestId) {
-      this.lastRequestId = meta.requestId;
-    }
-  }
-
-  private computeDriftDays(snapshot: EphemerisSnapshot): number {
-    if (!this.enableInertialPlayback) {
-      return 0;
-    }
-
-    const refFromSnapshot = Date.parse(snapshot.timestamp);
-    const referenceMs = Number.isFinite(refFromSnapshot)
-      ? refFromSnapshot
-      : this.snapshotReceivedAt ?? Date.now();
-    const now = Date.now();
-
-    const driftMs = now - referenceMs;
-    return Math.max(0, driftMs) / this.msPerDay;
-  }
-
-  private enrichVoyagerViews(): void {
-    const earth = this.lastSnapshot?.bodies?.find((b) => b.name === 'earth');
-    this.voyagerViews = (this.voyagers ?? []).map((v) => this.buildVoyagerView(v, earth));
-    this.refreshVoyagerMarkers();
-  }
-
-  private buildVoyagerView(v: VoyagerData, earth?: PlanetPosition): VoyagerView {
-    const earthDistanceKm = this.computeEarthDistanceKm(v, earth);
-    const distanceFromEarth = {
-      au: earthDistanceKm !== null ? earthDistanceKm / KM_PER_AU : v.distanceFromEarth?.au ?? null,
-      km: earthDistanceKm ?? v.distanceFromEarth?.km ?? null,
-      miles: earthDistanceKm !== null ? earthDistanceKm * 0.621371 : v.distanceFromEarth?.miles ?? null,
-      lightTimeMin:
-        earthDistanceKm !== null ? earthDistanceKm / SPEED_OF_LIGHT_KM_S / 60 : v.lightTime?.oneWayMinutes ?? null,
-      lightTimeHours:
-        earthDistanceKm !== null ? earthDistanceKm / SPEED_OF_LIGHT_KM_S / 3600 : null
-    };
-
-    const lightTime = this.computeLightTime(v, earthDistanceKm);
-    const trajectory = v.trajectory ?? this.computeTrajectoryFromVector(v);
-    const communication = this.findDsnContact(v);
-
-    const distanceForTrend = distanceFromEarth.km ?? v.distanceFromSun.km ?? null;
-    const speedKmS = v.speed.kmPerS ?? null;
-    const spark24hPath = this.buildSparklinePath(distanceForTrend, speedKmS, 24);
-    const spark7dPath = this.buildSparklinePath(distanceForTrend, speedKmS, 24 * 7);
-
-    return {
-      ...v,
-      distanceFromEarth,
-      lightTime,
-      trajectory,
-      communication,
-      spark24hPath,
-      spark7dPath
-    };
-  }
-
-  private computeEarthDistanceKm(v: VoyagerData, earth?: PlanetPosition): number | null {
-    if (v.distanceFromEarth?.km !== undefined && v.distanceFromEarth?.km !== null) {
-      return v.distanceFromEarth.km;
-    }
-    if (!earth || !Number.isFinite(earth.x_au) || !Number.isFinite(earth.y_au) || !Number.isFinite(earth.z_au)) {
-      return null;
-    }
-    const distAu = Math.sqrt(
-      Math.pow((v.positionAu?.x ?? 0) - earth.x_au, 2) +
-        Math.pow((v.positionAu?.y ?? 0) - earth.y_au, 2) +
-        Math.pow((v.positionAu?.z ?? 0) - earth.z_au, 2)
-    );
-    return distAu * KM_PER_AU;
-  }
-
-  private computeLightTime(v: VoyagerData, earthDistanceKm: number | null): Required<NonNullable<VoyagerData['lightTime']>> {
-    if (v.lightTime?.oneWaySeconds !== undefined && v.lightTime.oneWaySeconds !== null) {
-      return {
-        oneWaySeconds: v.lightTime.oneWaySeconds,
-        oneWayMinutes: v.lightTime.oneWayMinutes ?? v.lightTime.oneWaySeconds / 60,
-        twoWayMinutes: v.lightTime.twoWayMinutes ?? (v.lightTime.oneWaySeconds * 2) / 60
-      };
-    }
-    if (earthDistanceKm === null) {
-      return { oneWaySeconds: null, oneWayMinutes: null, twoWayMinutes: null };
-    }
-    const oneWaySeconds = earthDistanceKm / SPEED_OF_LIGHT_KM_S;
-    return {
-      oneWaySeconds,
-      oneWayMinutes: oneWaySeconds / 60,
-      twoWayMinutes: (oneWaySeconds * 2) / 60
-    };
-  }
-
-  private computeTrajectoryFromVector(v: VoyagerData): NonNullable<VoyagerData['trajectory']> {
-    const r = Math.sqrt(
-      (v.positionAu?.x ?? 0) * (v.positionAu?.x ?? 0) +
-        (v.positionAu?.y ?? 0) * (v.positionAu?.y ?? 0) +
-        (v.positionAu?.z ?? 0) * (v.positionAu?.z ?? 0)
-    );
-    const eclipticLatDeg = r ? (Math.asin((v.positionAu?.z ?? 0) / r) * 180) / Math.PI : null;
-    const eclipticLonDeg = r ? this.normalizeAngleDeg((Math.atan2(v.positionAu?.y ?? 0, v.positionAu?.x ?? 0) * 180) / Math.PI) : null;
-    const speed = Math.sqrt(
-      (v.velocityAuPerDay?.x ?? 0) * (v.velocityAuPerDay?.x ?? 0) +
-        (v.velocityAuPerDay?.y ?? 0) * (v.velocityAuPerDay?.y ?? 0) +
-        (v.velocityAuPerDay?.z ?? 0) * (v.velocityAuPerDay?.z ?? 0)
-    );
-    const velocityLatDeg =
-      speed > 0 && v.velocityAuPerDay?.z !== undefined
-        ? (Math.asin(v.velocityAuPerDay.z / speed) * 180) / Math.PI
-        : null;
-    const velocityAzimuthDeg =
-      speed > 0 && v.velocityAuPerDay?.x !== undefined && v.velocityAuPerDay?.y !== undefined
-        ? this.normalizeAngleDeg((Math.atan2(v.velocityAuPerDay.y, v.velocityAuPerDay.x) * 180) / Math.PI)
-        : null;
-
-    return { eclipticLatDeg, eclipticLonDeg, velocityAzimuthDeg, velocityLatDeg };
-  }
-
-  private refreshVoyagerMarkers(): void {
-    if (!this.lastSnapshot) {
-      this.voyagerMarkers = [];
-      return;
-    }
-    const deltaDays = this.timeOffsetDays + this.computeDriftDays(this.lastSnapshot);
-    this.voyagerMarkers = this.buildVoyagerMarkers(deltaDays, this.lastPanX, this.lastPanY);
-  }
-
-  private getVelocityComponent(vec: VoyagerData['velocityAuPerDay'] | undefined, key: 'x' | 'y' | 'z'): number | null {
-    if (!vec) {
-      return null;
-    }
-    const altKey = key === 'x' ? 'vx' : key === 'y' ? 'vy' : 'vz';
-    const value = (vec as any)[key] ?? (vec as any)[altKey];
-    return Number.isFinite(value) ? Number(value) : null;
-  }
-
-  private computeVoyagerPosition(v: VoyagerData, deltaDays: number): { x: number; y: number; z: number } {
-    const base = {
-      x: v.positionAu?.x ?? 0,
-      y: v.positionAu?.y ?? 0,
-      z: v.positionAu?.z ?? 0
-    };
-
-    if (!this.enableInertialPlayback) {
-      return base;
-    }
-
-    const vx = this.getVelocityComponent(v.velocityAuPerDay, 'x') ?? 0;
-    const vy = this.getVelocityComponent(v.velocityAuPerDay, 'y') ?? 0;
-    const vz = this.getVelocityComponent(v.velocityAuPerDay, 'z') ?? 0;
-
-    return {
-      x: base.x + vx * deltaDays,
-      y: base.y + vy * deltaDays,
-      z: base.z + vz * deltaDays
-    };
-  }
-
-  private findDsnContact(v: VoyagerData): DsnContact | null {
-    const match = this.dsnContacts.find(
-      (c) =>
-        c.spacecraft.toUpperCase().includes(v.id === 'voyager1' ? 'VGR1' : 'VGR2') ||
-        c.spacecraftId === (v.id === 'voyager1' ? '31' : '32')
-    );
-    return match ?? null;
-  }
-
-  private buildSparklinePath(distanceKm: number | null, speedKmS: number | null, horizonHours: number): string | null {
-    if (distanceKm === null || speedKmS === null) {
-      return null;
-    }
-    const points: { x: number; y: number }[] = [];
-    const steps = 12;
-    const horizonSeconds = horizonHours * 3600;
-    for (let i = steps; i >= 0; i--) {
-      const t = i / steps;
-      const secondsAgo = horizonSeconds * t;
-      const projected = distanceKm - speedKmS * secondsAgo;
-      points.push({ x: (1 - t) * 100, y: projected });
-    }
-
-    const min = Math.min(...points.map((p) => p.y));
-    const max = Math.max(...points.map((p) => p.y));
-    const span = max - min || 1;
-    const height = 30;
-
-    const normalized = points.map((p) => ({
-      x: p.x,
-      y: height - ((p.y - min) / span) * height
-    }));
-
-    return normalized
-      .map((p, idx) => `${idx === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`)
-      .join(' ');
-  }
-
-  private buildVoyagerMarkers(deltaDays: number, panX = 0, panY = 0): VoyagerMarker[] {
-    if (!this.voyagers?.length) {
-      return [];
-    }
-
-    const maxRadius = Math.min(this.width, this.height) / 2 - 12;
-
-    return this.voyagers
-      .map((v) => {
-        const pos = this.computeVoyagerPosition(v, deltaDays);
-        const rAu = Math.sqrt(pos.x * pos.x + pos.y * pos.y + pos.z * pos.z) || 0;
-        const rPxRaw = rAu ? this.distanceToPixels(rAu) : 0;
-        const rPx = Math.min(rPxRaw, maxRadius);
-        const scale = rAu ? rPx / rAu : 0;
-
-        let x: number;
-        let y: number;
-
-        if (this.viewMode === '3d') {
-          const projected = this.project3dPoint(pos.x, pos.y, pos.z, scale);
-          x = projected.x;
-          y = projected.y;
-        } else {
-          x = this.centerX + pos.x * scale;
-          y = this.centerY + pos.y * scale;
+      const pos = positions.get(planet.name);
+      if (pos && this.isFinitePosition(pos)) {
+        const advanced = this.advanceStateVector(
+          pos,
+          pos.timestamp || this.lastSnapshot?.timestamp,
+          planet
+        );
+        if (this.isFiniteVector(advanced)) {
+          vec = advanced;
         }
-
-        return {
-          id: v.id,
-          name: v.name,
-          x: x + panX,
-          y: y + panY,
-          rAu,
-          distanceLabel: rAu ? `${rAu.toFixed(1)} UA` : '',
-          color: VOYAGER_COLORS[v.id]
-        };
-      })
-      .filter((m) => Number.isFinite(m.x) && Number.isFinite(m.y));
-  }
-
-  copyVoyagerSnapshotAsJson(): void {
-    try {
-      const payload = {
-        timestamp: this.lastVoyagerTimestamp ?? new Date().toISOString(),
-        requestId: this.lastVoyagerRequestId,
-        voyagers: this.voyagerViews
-      };
-      const text = JSON.stringify(payload, null, 2);
-      this.copyText(text, 'Snapshot copié (JSON)');
-    } catch (err) {
-      console.error('copy json failed', err);
-      this.copyStatus = 'error';
-      this.copyMessage = 'Échec de la copie JSON';
-    }
-  }
-
-  exportVoyagerCsv(): void {
-    if (!this.voyagerViews.length) {
-      this.copyStatus = 'error';
-      this.copyMessage = 'Aucune donnée Voyager à exporter';
-      return;
-    }
-    const header = [
-      'name',
-      'id',
-      'timestamp',
-      'distanceSunKm',
-      'distanceEarthKm',
-      'speedKmS',
-      'eclipticLatDeg',
-      'eclipticLonDeg'
-    ];
-    const rows = this.voyagerViews.map((v) => [
-      v.name,
-      v.id,
-      v.timestamp,
-      v.distanceFromSun.km ?? '',
-      v.distanceFromEarth.km ?? '',
-      v.speed.kmPerS ?? '',
-      v.trajectory.eclipticLatDeg ?? '',
-      v.trajectory.eclipticLonDeg ?? ''
-    ]);
-    const csv = [header, ...rows]
-      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
-      .join('\n');
-    this.copyText(csv, 'Export CSV copié dans le presse-papiers');
-  }
-
-  private copyText(text: string, successMsg: string): void {
-    const done = () => {
-      this.copyStatus = 'success';
-      this.copyMessage = successMsg;
-      setTimeout(() => (this.copyStatus = 'idle'), 2000);
-    };
-
-    if (navigator?.clipboard?.writeText) {
-      navigator.clipboard.writeText(text).then(done).catch((err) => {
-        console.error('clipboard error', err);
-        this.copyStatus = 'error';
-        this.copyMessage = 'Impossible de copier dans le presse-papiers';
-      });
-    } else {
-      try {
-        const textarea = document.createElement('textarea');
-        textarea.value = text;
-        textarea.style.position = 'fixed';
-        textarea.style.opacity = '0';
-        document.body.appendChild(textarea);
-        textarea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textarea);
-        done();
-      } catch (err) {
-        console.error('copy fallback failed', err);
-        this.copyStatus = 'error';
-        this.copyMessage = 'Impossible de copier le texte';
       }
-    }
-  }
 
-  private normalizeAngleDeg(deg: number): number {
-    const wrapped = deg % 360;
-    return wrapped < 0 ? wrapped + 360 : wrapped;
-  }
+      const { x, y, z } = vec;
 
-  private hasVelocity(pos: PlanetPosition): pos is PlanetPosition & Required<Pick<PlanetPosition, 'vx' | 'vy' | 'vz'>> {
-    return (
-      pos.vx !== undefined &&
-      pos.vy !== undefined &&
-      pos.vz !== undefined &&
-      Number.isFinite(pos.vx) &&
-      Number.isFinite(pos.vy) &&
-      Number.isFinite(pos.vz)
-    );
-  }
+      const rAu = Math.sqrt(x * x + y * y + z * z) || 1e-6;
+      const angle = Math.atan2(y, x);
+      const rPx = this.distanceToPixels(rAu);
+      const screenX = this.centerX + rPx * Math.cos(angle);
+      const screenY = this.centerY + rPx * Math.sin(angle);
+      const radiusPx = this.planetRadiusToPixels(planet);
 
-  /**
-   * Calcule la position décalée temporellement d’une planète.
-   * - Si des vitesses vx/vy/vz sont présentes, on interpole linéairement en UA.
-   * - Sinon, on retombe sur l’approximation orbitale existante (période + inclinaison).
-   */
-  private computePositionWithOffset(
-    pos: PlanetPosition,
-    planet: Planet,
-    deltaDays: number
-  ): { x: number; y: number; z: number } {
-    if (deltaDays !== 0 && this.hasVelocity(pos)) {
+      const sunDx = this.centerX - screenX;
+      const sunDy = this.centerY - screenY;
+      const sunLen = Math.sqrt(sunDx * sunDx + sunDy * sunDy) || 1e-9;
+      const sunDirX = sunDx / sunLen;
+      const sunDirY = sunDy / sunLen;
+      const gradFx = `${(this.clamp01(0.5 + sunDirX * 0.33) * 100).toFixed(1)}%`;
+      const gradFy = `${(this.clamp01(0.5 + sunDirY * 0.33) * 100).toFixed(1)}%`;
+
+      const lighting = this.computePlanetPoleLighting(planet, { x_au: x, y_au: y, z_au: z });
+
       return {
-        x: pos.x_au + pos.vx * deltaDays,
-        y: pos.y_au + pos.vy * deltaDays,
-        z: pos.z_au + pos.vz * deltaDays
+        planet,
+        x: screenX,
+        y: screenY,
+        radiusPx,
+        textureRotationDeg: this.computeTextureRotationDeg(planet),
+        textureUrl: style.textureUrl,
+        sunDirX,
+        sunDirY,
+        gradFx,
+        gradFy,
+        lightColor: style.lightColor,
+        baseColor: style.baseColor,
+        darkColor: style.darkColor,
+        subsolarLatitudeDeg: lighting?.subsolarLatitudeDeg ?? null,
+        northPoleLit: lighting?.northPoleLit ?? null,
+        southPoleLit: lighting?.southPoleLit ?? null,
+        isSelected:
+          (this.selected?.kind === 'planet' && this.selected.planet.name === planet.name) ||
+          (this.selected?.kind === 'moon' && this.selected.planet.name === planet.name)
       };
-    }
-
-    if (deltaDays === 0) {
-      return { x: pos.x_au, y: pos.y_au, z: pos.z_au };
-    }
-
-    // Fallback : approximation orbitale simple si pas de vx/vy/vz.
-    const baseRAu =
-      Math.sqrt(
-        pos.x_au * pos.x_au +
-          pos.y_au * pos.y_au +
-          pos.z_au * pos.z_au
-      ) || planet.semiMajorAxisAU || 1e-6;
-
-    const orbitalPeriod = planet.orbitalPeriodDays || 365.25;
-    const baseAngle = Math.atan2(pos.y_au, pos.x_au);
-    const deltaAngle = (2 * Math.PI * deltaDays) / orbitalPeriod;
-    const targetAngle = baseAngle + deltaAngle;
-    const orbitalRadiusAu = Math.max(baseRAu, planet.semiMajorAxisAU || baseRAu);
-    const incRad = (planet.inclinationDeg || 0) * Math.PI / 180;
-
-    return {
-      x: orbitalRadiusAu * Math.cos(targetAngle),
-      y: orbitalRadiusAu * Math.sin(targetAngle),
-      z: pos.z_au + orbitalRadiusAu * Math.sin(incRad) * Math.sin(targetAngle)
-    };
+    });
   }
 
-  // ---------------------------------------------------------------------------
-  // Interaction utilisateur
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Gestion du clic sur une planète dans le SVG.
-   */
-  onPlanetClick(planet: Planet): void {
-    this.selectedPlanet = planet;
-    this.updateSelectionFlags(planet);
-    this.refreshSelectedEphemeris();
-  }
-
-  /**
-   * Gestion de la fermeture du panneau d’info.
-   */
-  onCloseInfo(): void {
-    this.selectedPlanet = null;
-    this.selectedEphemeris = null;
-
-    // Nettoie le flag de sélection visuelle
-    this.updateSelectionFlags(null);
-  }
-
-  get voyagerSourceBadge(): string | null {
-    if (!this.lastVoyagerTimestamp && !this.lastVoyagerRequestId) {
-      return null;
-    }
-    const freshness = this.lastVoyagerTimestamp ? this.freshnessFrom(this.lastVoyagerTimestamp) : null;
-    const req = this.lastVoyagerRequestId ? `req #${this.lastVoyagerRequestId}` : null;
-    const parts = ['Horizons', freshness ? `mis à jour ${freshness}` : null, req].filter(Boolean);
-    return parts.join(' • ');
-  }
-
-  private freshnessFrom(timestamp: string): string | null {
-    const ts = Date.parse(timestamp);
-    if (!Number.isFinite(ts)) {
-      return null;
-    }
-    const diffMs = Date.now() - ts;
-    if (diffMs < 0) {
-      return 'à l’instant';
-    }
-    const diffMin = diffMs / 60000;
-    if (diffMin < 1) return 'il y a < 1 min';
-    if (diffMin < 60) return `il y a ${Math.round(diffMin)} min`;
-    const diffH = diffMin / 60;
-    if (diffH < 24) return `il y a ${diffH.toFixed(1)} h`;
-    return `il y a ${(diffH / 24).toFixed(1)} j`;
-  }
-
-  /**
-   * Centre et zoome sur la planète sélectionnée.
-   */
-  centerOnSelected(): void {
-    if (!this.selectedPlanet) {
-      return;
-    }
-    this.focusPlanetName = this.selectedPlanet.name;
-    this.refreshDisplay();
-  }
-
-  clearFocus(): void {
-    this.focusPlanetName = null;
-    this.refreshDisplay();
-  }
-
-  onLegendSelect(planet: Planet): void {
-    this.selectedPlanet = planet;
-    this.focusPlanetName = planet.name;
-    this.updateSelectionFlags(planet);
-    this.refreshSelectedEphemeris();
-    this.refreshDisplay();
-  }
-
-  get focusedPlanet(): Planet | null {
-    if (!this.focusPlanetName) {
-      return null;
-    }
-    return this.planets.find((p) => p.name === this.focusPlanetName) ?? null;
-  }
-
-  get averageLatencyMs(): number | null {
-    if (this.latencyCount === 0) {
-      return null;
-    }
-    return this.latencySumMs / this.latencyCount;
-  }
-
-  private updateSelectionFlags(planet: Planet | null): void {
-    this.displayPlanets = this.displayPlanets.map((dp) => ({
-      ...dp,
-      isSelected: !!planet && dp.planet.name === planet.name
-    }));
-  }
-
-  /**
-   * Récupère l’éphéméride associée à la planète sélectionnée.
-   */
   private refreshSelectedEphemeris(): void {
-    if (!this.selectedPlanet || !this.lastSnapshot) {
+    const selected = this.selected;
+    if (!selected) {
       this.selectedEphemeris = null;
       return;
     }
-    const ephem = this.lastSnapshot.bodies.find(
-      (b) => b.name === this.selectedPlanet?.name
-    );
-    this.selectedEphemeris = ephem ?? null;
+
+    if (selected.kind === 'planet') {
+      if (!this.lastSnapshot) {
+        this.selectedEphemeris = null;
+        return;
+      }
+
+      const targetPlanet = selected.planet;
+      const ephem = this.lastSnapshot.bodies.find((b) => b.name === targetPlanet.name) ?? null;
+      if (!ephem) {
+        this.selectedEphemeris = null;
+        return;
+      }
+
+      const advanced = this.advanceStateVector(
+        ephem,
+        ephem.timestamp || this.lastSnapshot.timestamp,
+        targetPlanet
+      );
+      const baseTs = Date.parse(ephem.timestamp || this.lastSnapshot.timestamp || '');
+      const ts = Number.isFinite(baseTs)
+        ? new Date(baseTs + this.effectiveDaysFromTimestamp(ephem.timestamp || this.lastSnapshot.timestamp) * 86_400_000).toISOString()
+        : ephem.timestamp;
+
+      this.selectedEphemeris = { ...ephem, x_au: advanced.x, y_au: advanced.y, z_au: advanced.z, timestamp: ts };
+      return;
+    }
+
+    if (selected.kind === 'moon') {
+      const raw = this.moonEphemerides.get(selected.moon.id) ?? null;
+      this.selectedEphemeris = raw ? this.adjustBodyEphemeris(raw) : null;
+      return;
+    }
+
+    if (selected.kind === 'star') {
+      this.selectedEphemeris = this.sunEphemerisRaw ? this.adjustBodyEphemeris(this.sunEphemerisRaw) : null;
+      return;
+    }
   }
 
-  /**
-   * Libellé de fraîcheur des données (ex: "< 5 min").
-   */
-  get freshnessLabel(): string | null {
-    if (!this.lastUpdateTimestamp) {
-      return null;
+  private startSunPolling(): void {
+    this.stopSunPolling();
+    this.sunSub = interval(this.refreshIntervalMs)
+      .pipe(
+        startWith(0),
+        switchMap(() =>
+          this.ephemerisService
+            .getBodyEphemeris('sun', { forceRefresh: true })
+            .pipe(catchError(() => of(null)))
+        )
+      )
+      .subscribe({
+        next: (payload) => {
+          if (!payload) return;
+          if (this.selected?.kind !== 'star') return;
+          this.sunEphemerisRaw = payload;
+          this.selectedEphemeris = this.adjustBodyEphemeris(payload);
+        },
+        error: () => {
+          // Pas bloquant.
+        }
+      });
+  }
+
+  private stopSunPolling(): void {
+    this.sunSub?.unsubscribe();
+    this.sunSub = undefined;
+  }
+
+  private startMoonsPollingForFocusedPlanet(): void {
+    const planet = this.focusedPlanet;
+    const moons = planet?.moons ?? [];
+
+    this.moonsSub?.unsubscribe();
+    this.moonsSub = undefined;
+    this.moonEphemerides.clear();
+    this.displaySatellites = [];
+
+    if (!planet || moons.length === 0) {
+      return;
     }
-    const ts = Date.parse(this.lastUpdateTimestamp);
-    if (Number.isNaN(ts)) {
-      return null;
+
+    this.moonsSub = interval(this.refreshIntervalMs)
+      .pipe(
+        startWith(0),
+        switchMap(() =>
+          forkJoin(
+            moons.map((m) =>
+              this.ephemerisService
+                .getBodyEphemeris(m.id, { forceRefresh: true })
+                .pipe(catchError(() => of(null)))
+            )
+          )
+        )
+      )
+      .subscribe({
+        next: (results) => {
+          for (const payload of results) {
+            if (!payload) continue;
+            this.moonEphemerides.set(payload.id, payload);
+          }
+          this.refreshSatellitesDisplay();
+          if (this.selected?.kind === 'moon') {
+            this.refreshSelectedEphemeris();
+          }
+        },
+        error: () => {
+          // Pas bloquant.
+        }
+      });
+  }
+
+  private refreshSatellitesDisplay(): void {
+    const planet = this.focusedPlanet;
+    if (!planet) {
+      this.displaySatellites = [];
+      return;
     }
-    const diffMs = Date.now() - ts;
-    if (diffMs < 0) {
-      return 'à l’instant';
+
+    const dp = this.displayPlanets.find((d) => d.planet.name === planet.name) ?? null;
+    if (!dp) {
+      this.displaySatellites = [];
+      return;
     }
-    const diffMin = diffMs / 60000;
-    if (diffMin < 1) return '< 1 min';
-    if (diffMin < 5) return '< 5 min';
-    if (diffMin < 15) return '< 15 min';
-    if (diffMin < 60) return `${Math.round(diffMin)} min`;
-    const diffH = diffMin / 60;
-    if (diffH < 24) return `${diffH.toFixed(1)} h`;
-    return `${(diffH / 24).toFixed(1)} j`;
+
+    const moons = planet.moons ?? [];
+    if (moons.length === 0) {
+      this.displaySatellites = [];
+      return;
+    }
+
+    const planetEphem = this.lastSnapshot?.bodies.find((b) => b.name === planet.name) ?? null;
+    let planetX = 0;
+    let planetY = 0;
+    let planetZ = 0;
+    let canUseEphem = false;
+    if (planetEphem) {
+      const advancedPlanet = this.advanceStateVector(
+        planetEphem,
+        planetEphem.timestamp || this.lastSnapshot?.timestamp,
+        planet
+      );
+      if (this.isFiniteVector(advancedPlanet)) {
+        planetX = advancedPlanet.x;
+        planetY = advancedPlanet.y;
+        planetZ = advancedPlanet.z;
+        canUseEphem = true;
+      }
+    }
+
+    this.displaySatellites = moons
+      .map((moon, idx) => {
+        if (canUseEphem) {
+          const raw = this.moonEphemerides.get(moon.id);
+          if (raw) {
+            const m = this.adjustBodyEphemeris(raw);
+            const dx = m.x_au - planetX;
+            const dy = m.y_au - planetY;
+            const dz = m.z_au - planetZ;
+            const dist = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1e-9;
+            const angle = Math.atan2(dy, dx);
+
+            const planetR = this.planetRadiusToPixels(planet);
+            const extra = Math.min(30, Math.max(8, Math.log10(1 + dist * 20_000) * 8));
+            const offsetPx = planetR + 8 + extra + (idx % 3) * 1.5;
+
+            return {
+              moon,
+              x: dp.x + offsetPx * Math.cos(angle),
+              y: dp.y + offsetPx * Math.sin(angle),
+              isSelected: this.selected?.kind === 'moon' && this.selected.moon.id === moon.id
+            } as DisplaySatellite;
+          }
+        }
+
+        const fallback = this.computeFallbackMoonOffset(planet, idx, moons.length);
+        return {
+          moon,
+          x: dp.x + fallback.x,
+          y: dp.y + fallback.y,
+          isSelected: this.selected?.kind === 'moon' && this.selected.moon.id === moon.id
+        } as DisplaySatellite;
+      })
+      .filter((v): v is DisplaySatellite => !!v);
+  }
+
+  private adjustBodyEphemeris(ephem: BodyEphemerisPayload): BodyEphemerisPayload {
+    const { x, y, z } = this.advanceStateVector(ephem, ephem.timestamp);
+    const baseTs = Date.parse(ephem.timestamp || '');
+    const ts = Number.isFinite(baseTs)
+      ? new Date(baseTs + this.effectiveDaysFromTimestamp(ephem.timestamp) * 86_400_000).toISOString()
+      : ephem.timestamp;
+    return { ...ephem, x_au: x, y_au: y, z_au: z, timestamp: ts };
+  }
+
+  private advanceStateVector(
+    vec: { x_au: number; y_au: number; z_au: number; vx?: number; vy?: number; vz?: number; timestamp?: string },
+    timestampIso?: string,
+    planet?: Planet | null
+  ): { x: number; y: number; z: number } {
+    const days = this.effectiveDaysFromTimestamp(timestampIso);
+    if (
+      planet &&
+      Number.isFinite(planet.orbitalPeriodDays) &&
+      (planet.orbitalPeriodDays ?? 0) > 0
+    ) {
+      const periodDays = planet.orbitalPeriodDays as number;
+      const eRaw = planet.eccentricity ?? 0;
+      const e = Number.isFinite(eRaw) ? Math.min(Math.max(eRaw, 0), 0.9) : 0;
+      const baseAngle = Math.atan2(vec.y_au, vec.x_au);
+      const rawR = Math.sqrt(vec.x_au * vec.x_au + vec.y_au * vec.y_au);
+      const fallbackR =
+        Number.isFinite(rawR) && rawR > 0 ? rawR : planet.semiMajorAxisAU || 1e-6;
+
+      if (e > 0 && Number.isFinite(fallbackR) && fallbackR > 0) {
+        const cosTheta0 = Math.cos(baseAngle);
+        const sinTheta0 = Math.sin(baseAngle);
+        const denom = 1 + e * cosTheta0;
+        if (Number.isFinite(denom) && denom !== 0) {
+          const sqrtOneMinusESq = Math.sqrt(1 - e * e);
+          const cosE0 = (e + cosTheta0) / denom;
+          const sinE0 = (sqrtOneMinusESq * sinTheta0) / denom;
+          const E0 = Math.atan2(sinE0, cosE0);
+          const M0 = E0 - e * Math.sin(E0);
+          const meanMotion = (2 * Math.PI) / periodDays;
+          const M = this.normalizeAngleRad(M0 + meanMotion * days);
+          const E = this.solveKepler(M, e);
+          const cosE = Math.cos(E);
+          const sinE = Math.sin(E);
+          const r = fallbackR * (1 - e * cosE) / (1 - e * Math.cos(E0));
+          const denomTheta = 1 - e * cosE;
+          if (Number.isFinite(denomTheta) && denomTheta !== 0 && Number.isFinite(r)) {
+            const cosTheta = (cosE - e) / denomTheta;
+            const sinTheta = (sqrtOneMinusESq * sinE) / denomTheta;
+            return { x: r * cosTheta, y: r * sinTheta, z: vec.z_au };
+          }
+        }
+      }
+
+      const angle = baseAngle + (days / periodDays) * 2 * Math.PI;
+      return { x: fallbackR * Math.cos(angle), y: fallbackR * Math.sin(angle), z: vec.z_au };
+    }
+    const x = vec.vx !== undefined ? vec.x_au + vec.vx * days : vec.x_au;
+    const y = vec.vy !== undefined ? vec.y_au + vec.vy * days : vec.y_au;
+    const z = vec.vz !== undefined ? vec.z_au + vec.vz * days : vec.z_au;
+    return { x, y, z };
+  }
+
+  private effectiveDaysFromTimestamp(timestampIso?: string): number {
+    const baseTs = Date.parse(timestampIso || '');
+    const liveDays = Number.isFinite(baseTs) ? (this.nowMs - baseTs) / 86_400_000 : 0;
+    return this.offsetDays + liveDays;
+  }
+
+  private clamp01(v: number): number {
+    return Math.max(0, Math.min(1, v));
+  }
+
+  private isFinitePosition(pos: PlanetPosition): boolean {
+    return Number.isFinite(pos.x_au) && Number.isFinite(pos.y_au) && Number.isFinite(pos.z_au);
+  }
+
+  private isFiniteVector(vec: { x: number; y: number; z: number }): boolean {
+    return Number.isFinite(vec.x) && Number.isFinite(vec.y) && Number.isFinite(vec.z);
+  }
+
+  private computeFallbackOrbitPosition(planet: Planet, index: number): { x: number; y: number; z: number } {
+    const periodDays =
+      Number.isFinite(planet.orbitalPeriodDays) && (planet.orbitalPeriodDays ?? 0) > 0
+        ? planet.orbitalPeriodDays!
+        : 365.25;
+    const daysSinceEpoch = (this.nowMs - this.orbitEpochMs) / 86_400_000;
+    const basePhase = (daysSinceEpoch / periodDays) * 2 * Math.PI;
+    const offset =
+      this.planets.length > 0 ? (index / this.planets.length) * 2 * Math.PI : 0;
+    const angle = basePhase + offset;
+    const a = planet.semiMajorAxisAU;
+    const eRaw = planet.eccentricity ?? 0;
+    const e = Number.isFinite(eRaw) ? Math.min(Math.max(eRaw, 0), 0.9) : 0;
+    if (a && e > 0) {
+      const M = this.normalizeAngleRad(angle);
+      const E = this.solveKepler(M, e);
+      const cosE = Math.cos(E);
+      const sinE = Math.sin(E);
+      const r = a * (1 - e * cosE);
+      const denomTheta = 1 - e * cosE;
+      const sqrtOneMinusESq = Math.sqrt(1 - e * e);
+      const cosTheta = (cosE - e) / denomTheta;
+      const sinTheta = (sqrtOneMinusESq * sinE) / denomTheta;
+      return { x: r * cosTheta, y: r * sinTheta, z: 0 };
+    }
+    const r = Number.isFinite(a) ? (a as number) : 1e-6;
+    return { x: r * Math.cos(angle), y: r * Math.sin(angle), z: 0 };
+  }
+
+  private normalizeAngleRad(angle: number): number {
+    const twoPi = 2 * Math.PI;
+    const wrapped = ((angle + Math.PI) % twoPi + twoPi) % twoPi - Math.PI;
+    return wrapped;
+  }
+
+  private solveKepler(meanAnomaly: number, e: number): number {
+    let E = meanAnomaly;
+    for (let i = 0; i < 7; i += 1) {
+      const f = E - e * Math.sin(E) - meanAnomaly;
+      const fp = 1 - e * Math.cos(E);
+      if (fp === 0) break;
+      E = E - f / fp;
+    }
+    return E;
+  }
+
+  private computeFallbackMoonOffset(
+    planet: Planet,
+    index: number,
+    count: number
+  ): { x: number; y: number } {
+    const planetR = this.planetRadiusToPixels(planet);
+    const radius = planetR + 14 + index * 4;
+    const daysSinceEpoch = (this.nowMs - this.orbitEpochMs) / 86_400_000;
+    const speedDays = 7 + index * 3;
+    const basePhase = (daysSinceEpoch / speedDays) * 2 * Math.PI;
+    const offset = count > 0 ? (index / count) * 2 * Math.PI : 0;
+    const angle = basePhase + offset;
+    return { x: radius * Math.cos(angle), y: radius * Math.sin(angle) };
+  }
+
+  private computeTextureRotationDeg(planet: Planet): number {
+    const periodHours = planet.rotationPeriodHours ?? 24;
+    const periodMs = Math.abs(periodHours) * 3_600_000;
+    if (!Number.isFinite(periodMs) || periodMs <= 0) return 0;
+    const direction = periodHours < 0 ? -1 : 1;
+    const deltaMs = this.nowMs - this.rotationEpochMs + this.offsetDays * 86_400_000;
+    const phase = ((deltaMs % periodMs) + periodMs) % periodMs;
+    return (phase / periodMs) * 360 * direction;
+  }
+
+  private parseHexColor(hex: string): { r: number; g: number; b: number } | null {
+    const raw = hex.trim();
+    const m = /^#([0-9a-f]{6}|[0-9a-f]{3})$/i.exec(raw);
+    if (!m) return null;
+    const v = m[1];
+    if (v.length === 3) {
+      const r = parseInt(v[0] + v[0], 16);
+      const g = parseInt(v[1] + v[1], 16);
+      const b = parseInt(v[2] + v[2], 16);
+      return { r, g, b };
+    }
+    const r = parseInt(v.slice(0, 2), 16);
+    const g = parseInt(v.slice(2, 4), 16);
+    const b = parseInt(v.slice(4, 6), 16);
+    return { r, g, b };
+  }
+
+  private mixColor(color: string, target: string, t: number): string {
+    const a = this.parseHexColor(color);
+    const b = this.parseHexColor(target);
+    if (!a || !b) return color;
+    const tt = this.clamp01(t);
+    const r = Math.round(a.r + (b.r - a.r) * tt);
+    const g = Math.round(a.g + (b.g - a.g) * tt);
+    const bb = Math.round(a.b + (b.b - a.b) * tt);
+    return `rgb(${r}, ${g}, ${bb})`;
+  }
+
+  private rebuildPlanetStyleCache(): void {
+    this.planetStyleCache.clear();
+    for (const planet of this.planets) {
+      this.planetStyleCache.set(planet.name, {
+        textureUrl: this.textureByPlanet[planet.name],
+        lightColor: this.mixColor(planet.color, '#ffffff', 0.55),
+        baseColor: this.mixColor(planet.color, '#ffffff', 0.08),
+        darkColor: this.mixColor(planet.color, '#000000', 0.72)
+      });
+    }
+  }
+
+  private getPlanetStyle(
+    planet: Planet
+  ): { textureUrl: string; lightColor: string; baseColor: string; darkColor: string } {
+    return (
+      this.planetStyleCache.get(planet.name) ?? {
+        textureUrl: this.textureByPlanet[planet.name],
+        lightColor: this.mixColor(planet.color, '#ffffff', 0.55),
+        baseColor: this.mixColor(planet.color, '#ffffff', 0.08),
+        darkColor: this.mixColor(planet.color, '#000000', 0.72)
+      }
+    );
+  }
+
+  private computePlanetPoleLighting(
+    planet: Planet,
+    pos: { x_au: number; y_au: number; z_au: number }
+  ): { subsolarLatitudeDeg: number; northPoleLit: boolean; southPoleLit: boolean } | null {
+    const tilt = planet.axialTiltDeg;
+    if (tilt === undefined || tilt === null || !Number.isFinite(tilt)) return null;
+
+    const effectiveTilt = tilt <= 90 ? tilt : 180 - tilt;
+    const lambda = Math.atan2(pos.y_au, pos.x_au);
+    const subsolarLatitudeDeg = effectiveTilt * Math.sin(lambda);
+    const eps = 1e-9;
+    return {
+      subsolarLatitudeDeg,
+      northPoleLit: subsolarLatitudeDeg > eps,
+      southPoleLit: subsolarLatitudeDeg < -eps
+    };
   }
 }

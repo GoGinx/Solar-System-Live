@@ -2,6 +2,8 @@
  * Identifiant interne des planètes principales + Pluton.
  * Utilisé pour lier les données physiques, les couleurs et les éphémérides.
  */
+import type { Moon } from './moon';
+
 export type PlanetName =
   | 'mercury'
   | 'venus'
@@ -102,6 +104,11 @@ export interface Planet {
   rotationPeriodHours?: number;
 
   /**
+   * Temp‚rature moyenne de surface (K).
+   */
+  meanSurfaceTempK?: number;
+
+  /**
    * Densité moyenne (kg/m³).
    */
   meanDensity?: number;
@@ -130,6 +137,16 @@ export interface Planet {
    * URL de référence (Wikipedia, NASA factsheet, etc.).
    */
   referenceUrl?: string;
+
+  /**
+   * Liste (courte) de satellites naturels notables (ex: Lune, Phobos, Deimos, Io, Europa, Ganymede, Titan.).
+   */
+  majorMoons?: string[];
+
+  /**
+   * Liste de satellites naturels cliquables (avec identifiants Horizons).
+   */
+  moons?: Moon[];
 }
 
 /**

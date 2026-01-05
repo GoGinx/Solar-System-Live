@@ -1,0 +1,27 @@
+<div class="scrub" [attr.aria-label]="'aria.timeScrubber' | t">
+  <div class="meta">
+    <span class="cap">{{ 'label.timeRange' | t }}</span>
+    <span class="val">{{ label }}</span>
+  </div>
+  <div class="date-line">{{ selectedDateLabel }}</div>
+  <div class="slider-wrap">
+    <input
+      class="slider"
+      type="range"
+      min="-365"
+      max="0"
+      step="1"
+      [value]="time.offsetDays"
+      (input)="onInput($any($event.target).value)"
+      [attr.aria-label]="'aria.timeOffset' | t"
+    />
+    <span class="today-marker" aria-hidden="true"></span>
+  </div>
+  <div class="months">
+    <span *ngFor="let m of monthLabels">{{ m }}</span>
+  </div>
+  <div class="ticks">
+    <span>{{ 'tick.start' | t }}</span>
+    <span>{{ 'tick.now' | t }}</span>
+  </div>
+</div>

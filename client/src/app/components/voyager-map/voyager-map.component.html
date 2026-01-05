@@ -1,0 +1,452 @@
+<div class="universe">
+  <svg
+    class="universe-svg"
+    [attr.width]="width"
+    [attr.height]="height"
+    [attr.viewBox]="'0 0 ' + width + ' ' + height"
+    role="img"
+    [attr.aria-label]="'aria.voyagerMap' | t"
+  >
+    <defs>
+      <radialGradient id="sunGlow">
+        <stop offset="0%" stop-color="#fff7c2" stop-opacity="1" />
+        <stop offset="55%" stop-color="#ffcc33" stop-opacity="0.9" />
+        <stop offset="100%" stop-color="#dd8800" stop-opacity="0.0" />
+      </radialGradient>
+    </defs>
+
+    <!-- Rings -->
+    <g class="rings" [attr.aria-label]="'aria.scale' | t">
+      <circle
+        *ngFor="let r of ringsAu"
+        [attr.cx]="centerX"
+        [attr.cy]="centerY"
+        [attr.r]="auToRadiusPx(r)"
+        class="ring"
+      ></circle>
+    </g>
+
+    <!-- Sun -->
+    <circle [attr.cx]="centerX" [attr.cy]="centerY" r="10" fill="url(#sunGlow)" class="sun"></circle>
+    <circle [attr.cx]="centerX" [attr.cy]="centerY" r="3.8" fill="#ffcc33" class="sun-core"></circle>
+    <text [attr.x]="centerX + 14" [attr.y]="centerY - 10" class="sun-label">
+      {{ 'name.sun' | t }}
+    </text>
+
+    <!-- Context nodes -->
+    <g class="context">
+      <g *ngFor="let n of plottedNodes" (click)="openNode(n); $event.stopPropagation()">
+        <circle [attr.cx]="n.x" [attr.cy]="n.y" r="3.2" class="ctx-dot" [class.galaxy]="n.kind==='galaxy'"></circle>
+        <text [attr.x]="n.x + 8" [attr.y]="n.y + 4" class="ctx-label">{{ n.titleKey | t }}</text>
+      </g>
+    </g>
+
+    <!-- Voyagers -->
+    <g class="voyagers" *ngIf="voyagers.length">
+      <g
+        *ngFor="let v of voyagers; trackBy: trackByVoyagerId"
+        class="voyager"
+        [class.active]="v.id === active?.id"
+        [class.selected]="isSelectedVoyager(v)"
+        [class.voyager2]="v.id === 'voyager2'"
+      >
+        <path class="trail" [attr.d]="voyagerTrailPath(v)"></path>
+        <line [attr.x1]="centerX" [attr.y1]="centerY" [attr.x2]="voyagerX(v)" [attr.y2]="voyagerY(v)" class="ray"></line>
+
+        <g
+          class="probe-shape"
+          [attr.transform]="probeTransform(v)"
+          (click)="openVoyager(v); $event.stopPropagation()"
+        >
+          <circle r="11" class="probe-hit"></circle>
+          <rect x="-3.8" y="-2.6" width="7.6" height="5.2" rx="0.8" class="probe-body"></rect>
+          <circle cx="8.4" cy="0" r="4.1" class="probe-dish"></circle>
+          <circle cx="8.4" cy="0" r="1.4" class="probe-dish-core"></circle>
+          <line x1="-3.8" y1="0" x2="-12.5" y2="0" class="probe-boom"></line>
+          <line x1="-5.5" y1="-2.8" x2="-12.8" y2="-5.2" class="probe-boom"></line>
+          <line x1="-5.5" y1="2.8" x2="-12.8" y2="5.2" class="probe-boom"></line>
+          <circle cx="-12.8" cy="-5.2" r="1.5" class="probe-rtg"></circle>
+          <circle cx="-12.8" cy="5.2" r="1.5" class="probe-rtg"></circle>
+          <circle cx="-14.6" cy="0" r="1.2" class="probe-sensor"></circle>
+        </g>
+
+        <text [attr.x]="voyagerX(v) + 14" [attr.y]="voyagerY(v) - 10" class="probe-label">
+          {{ v.id === 'voyager2' ? 'Voyager 2' : 'Voyager 1' }}
+        </text>
+        <text [attr.x]="voyagerX(v) + 14" [attr.y]="voyagerY(v) + 10" class="probe-sub">
+          {{ formatDistanceLabelAu(v.distanceFromSun?.au) }}
+        </text>
+        <text
+          *ngIf="travelScaleUnits(v) as units"
+          [attr.x]="voyagerX(v) + 14"
+          [attr.y]="voyagerY(v) + 26"
+          class="probe-year"
+        >
+          ~{{ units | number:'1.1-1' }} {{ 'unit.thirtyYearsShort' | t }}
+        </text>
+      </g>
+    </g>
+  </svg>
+
+  <div class="panel" *ngIf="selectedPanel as p" role="dialog" aria-modal="true">
+    <button class="close" type="button" (click)="closePanel()" aria-label="Close">&times;</button>
+
+    <ng-container *ngIf="p.kind === 'voyager'">
+      <div class="panel-hdr">
+        <div class="tag">{{ 'label.live' | t }}</div>
+        <div class="title">{{ p.voyager.id === 'voyager2' ? 'Voyager 2' : 'Voyager 1' }}</div>
+        <div class="sub">{{ projectedTimestamp(p.voyager) }}</div>
+      </div>
+
+      <div class="synth" [class.voyager2]="p.voyager.id === 'voyager2'">
+        <svg
+          class="synth-map"
+          [attr.width]="miniSize"
+          [attr.height]="miniSize"
+          [attr.viewBox]="'0 0 ' + miniSize + ' ' + miniSize"
+          aria-hidden="true"
+        >
+          <circle
+            *ngFor="let r of ringsAu"
+            [attr.cx]="miniCenter"
+            [attr.cy]="miniCenter"
+            [attr.r]="miniRadiusPx(r)"
+            class="synth-ring"
+          ></circle>
+          <circle [attr.cx]="miniCenter" [attr.cy]="miniCenter" r="6" class="synth-sun"></circle>
+          <circle
+            [attr.cx]="miniPoint(p.voyager).x"
+            [attr.cy]="miniPoint(p.voyager).y"
+            r="3.6"
+            class="synth-probe"
+            [class.v2]="p.voyager.id === 'voyager2'"
+          ></circle>
+        </svg>
+        <div class="synth-meta">
+          <div class="synth-title">{{ 'label.syntheticPosition' | t }}</div>
+          <div class="synth-sub">
+            {{ 'label.timeScale30Years' | t }}:
+            <ng-container *ngIf="travelScaleUnits(p.voyager) as units; else noYears">
+              {{ units | number:'1.1-1' }} {{ 'unit.thirtyYearsShort' | t }}
+            </ng-container>
+            <ng-template #noYears>-</ng-template>
+          </div>
+        </div>
+      </div>
+
+      <div class="mission" *ngIf="missionFacts(p.voyager) as facts">
+        <div class="mission-title">{{ 'label.missionFacts' | t }}</div>
+        <div class="mission-rows">
+          <div class="mission-row">
+            <div class="k">{{ 'label.launchDate' | t }}</div>
+            <div class="v">{{ formatMissionDate(facts.launchDate) }}</div>
+          </div>
+          <div class="mission-row">
+            <div class="k">{{ 'label.flybys' | t }}</div>
+            <div class="v">{{ formatFlybys(facts) }}</div>
+          </div>
+          <div class="mission-row">
+            <div class="k">{{ 'label.status' | t }}</div>
+            <div class="v">{{ facts.statusKey | t }}</div>
+          </div>
+          <div class="mission-row">
+            <div class="k">{{ 'label.heliopauseDelta' | t }}</div>
+            <div class="v">{{ heliopauseDeltaLabel(p.voyager) }}</div>
+          </div>
+          <div class="mission-row">
+            <div class="k">{{ 'label.heliopauseLy' | t }}</div>
+            <div class="v">{{ heliopauseLyLabel(p.voyager) }}</div>
+          </div>
+        </div>
+        <div class="progress" *ngIf="heliopauseProgress(p.voyager) as progress">
+          <div class="progress-labels">
+            <span>{{ 'name.sun' | t }}</span>
+            <span>{{ 'label.heliopause' | t }}</span>
+            <span>{{ p.voyager.id === 'voyager2' ? 'Voyager 2' : 'Voyager 1' }}</span>
+          </div>
+          <div class="progress-bar">
+            <span class="progress-fill" [style.width.%]="progress.percent"></span>
+            <span class="progress-mark" aria-hidden="true"></span>
+            <span class="progress-dot" [class.beyond]="progress.beyond" [style.left.%]="progress.percent"></span>
+          </div>
+        </div>
+        <div class="signal-badge" *ngIf="signalDelayText(p.voyager) as delay">
+          <span class="signal-label">{{ 'label.signalDelay' | t }}</span>
+          <span class="signal-value">{{ delay }}</span>
+        </div>
+        <div class="mission-links">
+          <span class="mission-links-label">{{ 'label.links' | t }}</span>
+          <a [href]="facts.links.nasa" target="_blank" rel="noreferrer">{{ 'label.nasa' | t }}</a>
+          <a [href]="facts.links.jpl" target="_blank" rel="noreferrer">{{ 'label.jpl' | t }}</a>
+        </div>
+      </div>
+
+      <div class="mission instruments" *ngIf="missionFacts(p.voyager) as facts">
+        <div class="mission-title">{{ 'label.instruments' | t }}</div>
+        <div class="mission-tags">
+          <span
+            class="mission-tag"
+            *ngFor="let instrument of instrumentItems(facts)"
+            [attr.title]="instrument.tooltip"
+          >
+            <span class="instrument-icon">{{ instrument.code }}</span>
+            {{ instrument.label }}
+          </span>
+        </div>
+        <div class="mission-links">
+          <span class="mission-links-label">{{ 'label.links' | t }}</span>
+          <a [href]="facts.links.instruments" target="_blank" rel="noreferrer">{{ 'label.nasa' | t }}</a>
+        </div>
+      </div>
+
+      <div class="mission graph" *ngIf="distanceGraph(p.voyager) as graph">
+        <div class="graph-head">
+          <div class="mission-title">{{ 'label.distanceGraph' | t }}</div>
+          <button class="graph-toggle" type="button" (click)="toggleComparison()">
+            {{ showComparison ? ('label.compareOff' | t) : ('label.compareOn' | t) }}
+          </button>
+        </div>
+        <div class="graph-legend">
+          <span class="legend-item">
+            <span class="legend-line main"></span>
+            {{ 'label.graphLegendMain' | t }}
+          </span>
+          <span class="legend-item">
+            <span class="legend-line other"></span>
+            {{ 'label.graphLegendOther' | t }}
+          </span>
+        </div>
+        <svg
+          class="graph-svg"
+          [attr.width]="graphWidth"
+          [attr.height]="graphHeight"
+          [attr.viewBox]="'0 0 ' + graphWidth + ' ' + graphHeight"
+          aria-hidden="true"
+        >
+          <line
+            class="graph-axis"
+            [attr.x1]="graphPadding"
+            [attr.y1]="graphPadding"
+            [attr.x2]="graphPadding"
+            [attr.y2]="graphHeight - graphPadding"
+          ></line>
+          <line
+            class="graph-axis"
+            [attr.x1]="graphPadding"
+            [attr.y1]="graphHeight - graphPadding"
+            [attr.x2]="graphWidth - graphPadding"
+            [attr.y2]="graphHeight - graphPadding"
+          ></line>
+          <line
+            *ngFor="let t of graphYTicks"
+            class="graph-grid-line"
+            [attr.x1]="graphPadding"
+            [attr.x2]="graphWidth - graphPadding"
+            [attr.y1]="graphHeight - graphPadding - (graphHeight - graphPadding * 2) * t"
+            [attr.y2]="graphHeight - graphPadding - (graphHeight - graphPadding * 2) * t"
+          ></line>
+          <line
+            *ngFor="let x of graph.gridX; let i = index"
+            class="graph-grid-line"
+            [class.major]="i % 3 === 0"
+            [attr.x1]="x"
+            [attr.x2]="x"
+            [attr.y1]="graphHeight - graphPadding"
+            [attr.y2]="graphPadding"
+          ></line>
+          <line
+            class="graph-today"
+            [attr.x1]="graphWidth - graphPadding"
+            [attr.x2]="graphWidth - graphPadding"
+            [attr.y1]="graphPadding"
+            [attr.y2]="graphHeight - graphPadding"
+          ></line>
+          <ng-container *ngIf="showComparison && distanceGraphCompare(p.voyager, graph) as compare">
+            <path [attr.d]="compare.path" class="graph-line compare"></path>
+          </ng-container>
+          <path [attr.d]="graph.path" class="graph-line"></path>
+          <circle [attr.cx]="graph.currentX" [attr.cy]="graph.currentY" r="3" class="graph-dot"></circle>
+          <text [attr.x]="graph.currentX + 6" [attr.y]="graph.currentY - 6" class="graph-value">
+            {{ graph.currentLabel }}
+          </text>
+        </svg>
+        <div class="graph-months">
+          <span *ngFor="let m of graphMonthLabels()">{{ m }}</span>
+        </div>
+        <div class="graph-footer">
+          <span>{{ 'label.graphRange' | t }}</span>
+          <span>{{ projectedDistanceFromSunAu(p.voyager) | number:'1.1-1' }} AU</span>
+        </div>
+      </div>
+
+      <div class="rows">
+        <div class="row">
+          <div class="k">{{ 'label.galaxy' | t }}</div>
+          <div class="v">{{ 'context.milky.title' | t }}</div>
+        </div>
+        <div class="row" *ngIf="p.voyager.source">
+          <div class="k">{{ 'label.source' | t }}</div>
+          <div class="v">{{ p.voyager.source }}</div>
+        </div>
+        <div class="row" *ngIf="p.voyager.referenceFrame">
+          <div class="k">{{ 'label.referenceFrame' | t }}</div>
+          <div class="v">{{ p.voyager.referenceFrame }}</div>
+        </div>
+        <div class="row">
+          <div class="k">{{ 'label.distanceSun' | t }}</div>
+          <div class="v">{{ projectedDistanceFromSunAu(p.voyager) | number:'1.1-1' }} AU</div>
+        </div>
+        <div class="row" *ngIf="travelScaleUnits(p.voyager) as units">
+          <div class="k">{{ 'label.timeScale30Years' | t }}</div>
+          <div class="v">{{ units | number:'1.1-1' }} {{ 'unit.thirtyYearsShort' | t }}</div>
+        </div>
+        <div class="row" *ngIf="p.voyager.distanceFromSun?.km !== null">
+          <div class="k">{{ 'label.distanceSunKm' | t }}</div>
+          <div class="v">{{ p.voyager.distanceFromSun?.km | number:'1.0-0' }}</div>
+        </div>
+        <div class="row" *ngIf="p.voyager.distanceFromSun?.miles !== null">
+          <div class="k">{{ 'label.distanceSunMiles' | t }}</div>
+          <div class="v">{{ p.voyager.distanceFromSun?.miles | number:'1.0-0' }}</div>
+        </div>
+        <div class="row" *ngIf="p.voyager.distanceFromEarth?.au !== undefined">
+          <div class="k">{{ 'label.distanceEarth' | t }}</div>
+          <div class="v">{{ p.voyager.distanceFromEarth?.au | number:'1.1-1' }} AU</div>
+        </div>
+        <div class="row" *ngIf="p.voyager.distanceFromEarth?.km !== undefined && p.voyager.distanceFromEarth?.km !== null">
+          <div class="k">{{ 'label.distanceEarthKm' | t }}</div>
+          <div class="v">{{ p.voyager.distanceFromEarth?.km | number:'1.0-0' }}</div>
+        </div>
+        <div class="row" *ngIf="p.voyager.distanceFromEarth?.miles !== undefined && p.voyager.distanceFromEarth?.miles !== null">
+          <div class="k">{{ 'label.distanceEarthMiles' | t }}</div>
+          <div class="v">{{ p.voyager.distanceFromEarth?.miles | number:'1.0-0' }}</div>
+        </div>
+        <div class="row">
+          <div class="k">{{ 'label.speed' | t }}</div>
+          <div class="v">{{ p.voyager.speed?.kmPerS | number:'1.2-2' }} km/s</div>
+        </div>
+        <div class="row" *ngIf="p.voyager.speed?.auPerDay !== null">
+          <div class="k">{{ 'label.speedAuPerDay' | t }}</div>
+          <div class="v">{{ p.voyager.speed?.auPerDay | number:'1.3-4' }}</div>
+        </div>
+        <div class="row" *ngIf="p.voyager.speed?.milesPerS !== null">
+          <div class="k">{{ 'label.speedMilesPerS' | t }}</div>
+          <div class="v">{{ p.voyager.speed?.milesPerS | number:'1.2-2' }}</div>
+        </div>
+        <div class="row" *ngIf="p.voyager.positionAu?.x !== null">
+          <div class="k">{{ 'label.positionXAu' | t }}</div>
+          <div class="v">{{ p.voyager.positionAu?.x | number:'1.3-3' }}</div>
+        </div>
+        <div class="row" *ngIf="p.voyager.positionAu?.y !== null">
+          <div class="k">{{ 'label.positionYAu' | t }}</div>
+          <div class="v">{{ p.voyager.positionAu?.y | number:'1.3-3' }}</div>
+        </div>
+        <div class="row" *ngIf="p.voyager.positionAu?.z !== null">
+          <div class="k">{{ 'label.positionZAu' | t }}</div>
+          <div class="v">{{ p.voyager.positionAu?.z | number:'1.3-3' }}</div>
+        </div>
+        <div class="row" *ngIf="p.voyager.velocityAuPerDay?.vx !== null">
+          <div class="k">{{ 'label.vxAuDay' | t }}</div>
+          <div class="v">{{ p.voyager.velocityAuPerDay?.vx | number:'1.4-5' }}</div>
+        </div>
+        <div class="row" *ngIf="p.voyager.velocityAuPerDay?.vy !== null">
+          <div class="k">{{ 'label.vyAuDay' | t }}</div>
+          <div class="v">{{ p.voyager.velocityAuPerDay?.vy | number:'1.4-5' }}</div>
+        </div>
+        <div class="row" *ngIf="p.voyager.velocityAuPerDay?.vz !== null">
+          <div class="k">{{ 'label.vzAuDay' | t }}</div>
+          <div class="v">{{ p.voyager.velocityAuPerDay?.vz | number:'1.4-5' }}</div>
+        </div>
+        <div class="row" *ngIf="p.voyager.positionKm?.x !== null">
+          <div class="k">{{ 'label.positionXKm' | t }}</div>
+          <div class="v">{{ p.voyager.positionKm?.x | number:'1.0-0' }}</div>
+        </div>
+        <div class="row" *ngIf="p.voyager.positionKm?.y !== null">
+          <div class="k">{{ 'label.positionYKm' | t }}</div>
+          <div class="v">{{ p.voyager.positionKm?.y | number:'1.0-0' }}</div>
+        </div>
+        <div class="row" *ngIf="p.voyager.positionKm?.z !== null">
+          <div class="k">{{ 'label.positionZKm' | t }}</div>
+          <div class="v">{{ p.voyager.positionKm?.z | number:'1.0-0' }}</div>
+        </div>
+        <div class="row" *ngIf="p.voyager.velocityKmPerS?.vx !== null">
+          <div class="k">{{ 'label.vxKmS' | t }}</div>
+          <div class="v">{{ p.voyager.velocityKmPerS?.vx | number:'1.2-2' }}</div>
+        </div>
+        <div class="row" *ngIf="p.voyager.velocityKmPerS?.vy !== null">
+          <div class="k">{{ 'label.vyKmS' | t }}</div>
+          <div class="v">{{ p.voyager.velocityKmPerS?.vy | number:'1.2-2' }}</div>
+        </div>
+        <div class="row" *ngIf="p.voyager.velocityKmPerS?.vz !== null">
+          <div class="k">{{ 'label.vzKmS' | t }}</div>
+          <div class="v">{{ p.voyager.velocityKmPerS?.vz | number:'1.2-2' }}</div>
+        </div>
+        <div class="row" *ngIf="p.voyager.lightTime?.oneWayMinutes !== null">
+          <div class="k">{{ 'label.lightTimeOneWay' | t }}</div>
+          <div class="v">{{ p.voyager.lightTime?.oneWayMinutes | number:'1.1-1' }} min</div>
+        </div>
+        <div class="row" *ngIf="p.voyager.lightTime?.twoWayMinutes !== null">
+          <div class="k">{{ 'label.lightTimeTwoWay' | t }}</div>
+          <div class="v">{{ p.voyager.lightTime?.twoWayMinutes | number:'1.1-1' }} min</div>
+        </div>
+        <div class="row" *ngIf="p.voyager.trajectory?.eclipticLonDeg !== undefined">
+          <div class="k">{{ 'label.eclipticLonLat' | t }}</div>
+          <div class="v">
+            {{ p.voyager.trajectory?.eclipticLonDeg | number:'1.0-1' }} deg /
+            {{ p.voyager.trajectory?.eclipticLatDeg | number:'1.0-1' }} deg
+          </div>
+        </div>
+        <div class="row" *ngIf="p.voyager.trajectory?.velocityAzimuthDeg !== undefined">
+          <div class="k">{{ 'label.velocityAzimuth' | t }}</div>
+          <div class="v">{{ p.voyager.trajectory?.velocityAzimuthDeg | number:'1.0-0' }} deg</div>
+        </div>
+        <div class="row" *ngIf="p.voyager.trajectory?.velocityLatDeg !== undefined">
+          <div class="k">{{ 'label.velocityLat' | t }}</div>
+          <div class="v">{{ p.voyager.trajectory?.velocityLatDeg | number:'1.0-1' }} deg</div>
+        </div>
+      </div>
+
+      <button class="expand" type="button" (click)="toggleExpanded()">
+        {{ expanded ? ('label.detailsLess' | t) : ('label.detailsMore' | t) }}
+      </button>
+
+      <div class="details" *ngIf="expanded">
+        {{ 'voyager.details' | t }}
+      </div>
+    </ng-container>
+
+    <ng-container *ngIf="p.kind === 'node'">
+      <div class="panel-hdr">
+        <div class="tag">{{ p.node.kind.toUpperCase() }}</div>
+        <div class="title">{{ p.node.titleKey | t }}</div>
+        <div class="sub" *ngIf="p.node.notToScale">{{ 'label.outOfScale' | t }}</div>
+      </div>
+
+      <div class="rows">
+        <div class="row">
+          <div class="k">{{ 'label.type' | t }}</div>
+          <div class="v">{{ p.node.kind }}</div>
+        </div>
+        <div class="row">
+          <div class="k">{{ 'label.angle' | t }}</div>
+          <div class="v">{{ p.node.angleDeg | number:'1.0-0' }} deg</div>
+        </div>
+        <div class="row" *ngIf="p.node.distanceAu !== undefined">
+          <div class="k">{{ 'label.distanceAu' | t }}</div>
+          <div class="v">{{ p.node.distanceAu | number:'1.0-0' }}</div>
+        </div>
+        <div class="row" *ngIf="p.node.notToScale">
+          <div class="k">{{ 'label.scale' | t }}</div>
+          <div class="v">{{ 'label.outOfScale' | t }}</div>
+        </div>
+      </div>
+
+      <div class="details">
+        {{ expanded ? (p.node.longKey | t) : (p.node.shortKey | t) }}
+      </div>
+
+      <button class="expand" type="button" (click)="toggleExpanded()">
+        {{ expanded ? ('label.detailsShort' | t) : ('label.detailsLong' | t) }}
+      </button>
+    </ng-container>
+  </div>
+</div>

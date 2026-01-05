@@ -1,0 +1,413 @@
+{
+  "source": "local-catalog",
+  "updatedAt": "2025-12-29",
+  "star": {
+    "id": "sun",
+    "displayName": "Soleil",
+    "color": "#ffcc33",
+    "radiusKm": 695700,
+    "massKg": 1.9885e30,
+    "meanSurfaceTempK": 5772,
+    "referenceUrl": "https://en.wikipedia.org/wiki/Sun",
+    "info": "Etoile de type naine jaune (G2V), au centre du Systeme solaire."
+  },
+  "planets": [
+    {
+      "name": "mercury",
+      "displayName": "Mercure",
+      "color": "#b0b0b0",
+      "radiusKm": 2440,
+      "massKg": 3.3011e23,
+      "semiMajorAxisAU": 0.387,
+      "orbitalPeriodDays": 87.97,
+      "rotationPeriodHours": 1407.5,
+      "inclinationDeg": 7,
+      "axialTiltDeg": 0.03,
+      "moonsCount": 0,
+      "hasRings": false,
+      "referenceUrl": "https://en.wikipedia.org/wiki/Mercury_(planet)",
+      "info": "Planete tellurique la plus proche du Soleil."
+    },
+    {
+      "name": "venus",
+      "displayName": "Venus",
+      "color": "#e3c16f",
+      "radiusKm": 6052,
+      "massKg": 4.8675e24,
+      "semiMajorAxisAU": 0.723,
+      "orbitalPeriodDays": 224.7,
+      "rotationPeriodHours": -5832.5,
+      "inclinationDeg": 3.39,
+      "axialTiltDeg": 177.36,
+      "moonsCount": 0,
+      "hasRings": false,
+      "referenceUrl": "https://en.wikipedia.org/wiki/Venus",
+      "info": "Planete tellurique a atmosphere dense, effet de serre extreme."
+    },
+    {
+      "name": "earth",
+      "displayName": "Terre",
+      "color": "#4a90e2",
+      "radiusKm": 6371,
+      "massKg": 5.97237e24,
+      "semiMajorAxisAU": 1,
+      "orbitalPeriodDays": 365.256,
+      "rotationPeriodHours": 23.934,
+      "inclinationDeg": 0,
+      "axialTiltDeg": 23.44,
+      "moonsCount": 1,
+      "majorMoons": ["Lune"],
+      "moons": [
+        {
+          "id": "moon",
+          "displayName": "Lune",
+          "parentPlanetName": "earth",
+          "horizonsId": "301",
+          "radiusKm": 1737.4,
+          "massKg": 7.342e22,
+          "referenceUrl": "https://en.wikipedia.org/wiki/Moon",
+          "info": "Satellite naturel de la Terre."
+        }
+      ],
+      "hasRings": false,
+      "referenceUrl": "https://en.wikipedia.org/wiki/Earth",
+      "info": "Planete tellurique avec eau liquide en surface."
+    },
+    {
+      "name": "mars",
+      "displayName": "Mars",
+      "color": "#c1440e",
+      "radiusKm": 3389,
+      "massKg": 6.4171e23,
+      "semiMajorAxisAU": 1.524,
+      "orbitalPeriodDays": 686.98,
+      "rotationPeriodHours": 24.623,
+      "inclinationDeg": 1.85,
+      "axialTiltDeg": 25.19,
+      "moonsCount": 2,
+      "majorMoons": ["Phobos", "Deimos"],
+      "moons": [
+        {
+          "id": "phobos",
+          "displayName": "Phobos",
+          "parentPlanetName": "mars",
+          "horizonsId": "401",
+          "radiusKm": 11.27,
+          "massKg": 1.0659e16,
+          "referenceUrl": "https://en.wikipedia.org/wiki/Phobos_(moon)",
+          "info": "Plus grand satellite de Mars."
+        },
+        {
+          "id": "deimos",
+          "displayName": "Deimos",
+          "parentPlanetName": "mars",
+          "horizonsId": "402",
+          "radiusKm": 6.2,
+          "massKg": 1.4762e15,
+          "referenceUrl": "https://en.wikipedia.org/wiki/Deimos_(moon)",
+          "info": "Petit satellite de Mars."
+        }
+      ],
+      "hasRings": false,
+      "referenceUrl": "https://en.wikipedia.org/wiki/Mars",
+      "info": "Planete rouge, cible majeure de l'exploration robotique."
+    },
+    {
+      "name": "jupiter",
+      "displayName": "Jupiter",
+      "color": "#d9b58b",
+      "radiusKm": 69911,
+      "massKg": 1.8982e27,
+      "semiMajorAxisAU": 5.203,
+      "orbitalPeriodDays": 4332.59,
+      "rotationPeriodHours": 9.925,
+      "inclinationDeg": 1.304,
+      "axialTiltDeg": 3.13,
+      "moonsCount": 95,
+      "majorMoons": ["Io", "Europa", "Ganymede", "Callisto"],
+      "moons": [
+        {
+          "id": "io",
+          "displayName": "Io",
+          "parentPlanetName": "jupiter",
+          "horizonsId": "501",
+          "radiusKm": 1821.6,
+          "massKg": 8.9319e22,
+          "referenceUrl": "https://en.wikipedia.org/wiki/Io_(moon)",
+          "info": "Satellite galiléen volcanique."
+        },
+        {
+          "id": "europa",
+          "displayName": "Europe",
+          "parentPlanetName": "jupiter",
+          "horizonsId": "502",
+          "radiusKm": 1560.8,
+          "massKg": 4.7998e22,
+          "referenceUrl": "https://en.wikipedia.org/wiki/Europa_(moon)",
+          "info": "Océan sous-glaciaire supposé."
+        },
+        {
+          "id": "ganymede",
+          "displayName": "Ganymède",
+          "parentPlanetName": "jupiter",
+          "horizonsId": "503",
+          "radiusKm": 2634.1,
+          "massKg": 1.4819e23,
+          "referenceUrl": "https://en.wikipedia.org/wiki/Ganymede_(moon)",
+          "info": "Plus grand satellite du Système solaire."
+        },
+        {
+          "id": "callisto",
+          "displayName": "Callisto",
+          "parentPlanetName": "jupiter",
+          "horizonsId": "504",
+          "radiusKm": 2410.3,
+          "massKg": 1.0759e23,
+          "referenceUrl": "https://en.wikipedia.org/wiki/Callisto_(moon)",
+          "info": "Satellite galiléen très cratérisé."
+        }
+      ],
+      "hasRings": true,
+      "referenceUrl": "https://en.wikipedia.org/wiki/Jupiter",
+      "info": "Geante gazeuse, planete la plus massive du Systeme solaire."
+    },
+    {
+      "name": "saturn",
+      "displayName": "Saturne",
+      "color": "#f5deb3",
+      "radiusKm": 58232,
+      "massKg": 5.6834e26,
+      "semiMajorAxisAU": 9.537,
+      "orbitalPeriodDays": 10759.22,
+      "rotationPeriodHours": 10.656,
+      "inclinationDeg": 2.485,
+      "axialTiltDeg": 26.73,
+      "moonsCount": 146,
+      "majorMoons": ["Titan", "Enceladus", "Rhea", "Iapetus"],
+      "moons": [
+        {
+          "id": "titan",
+          "displayName": "Titan",
+          "parentPlanetName": "saturn",
+          "horizonsId": "606",
+          "radiusKm": 2574.7,
+          "massKg": 1.3452e23,
+          "referenceUrl": "https://en.wikipedia.org/wiki/Titan_(moon)",
+          "info": "Plus grand satellite de Saturne."
+        },
+        {
+          "id": "enceladus",
+          "displayName": "Encelade",
+          "parentPlanetName": "saturn",
+          "horizonsId": "602",
+          "radiusKm": 252.1,
+          "massKg": 1.08022e20,
+          "referenceUrl": "https://en.wikipedia.org/wiki/Enceladus",
+          "info": "Geysers de glace au pôle sud."
+        },
+        {
+          "id": "rhea",
+          "displayName": "Rhéa",
+          "parentPlanetName": "saturn",
+          "horizonsId": "605",
+          "radiusKm": 763.8,
+          "massKg": 2.3065e21,
+          "referenceUrl": "https://en.wikipedia.org/wiki/Rhea_(moon)",
+          "info": "Deuxième plus grand satellite de Saturne."
+        },
+        {
+          "id": "iapetus",
+          "displayName": "Japet",
+          "parentPlanetName": "saturn",
+          "horizonsId": "608",
+          "radiusKm": 734.5,
+          "massKg": 1.8056e21,
+          "referenceUrl": "https://en.wikipedia.org/wiki/Iapetus_(moon)",
+          "info": "Contraste d'albédo très marqué."
+        }
+      ],
+      "hasRings": true,
+      "referenceUrl": "https://en.wikipedia.org/wiki/Saturn",
+      "info": "Geante gazeuse celebre pour ses anneaux."
+    },
+    {
+      "name": "uranus",
+      "displayName": "Uranus",
+      "color": "#9cd6d6",
+      "radiusKm": 25362,
+      "massKg": 8.681e25,
+      "semiMajorAxisAU": 19.191,
+      "orbitalPeriodDays": 30688.5,
+      "rotationPeriodHours": -17.24,
+      "inclinationDeg": 0.773,
+      "axialTiltDeg": 97.77,
+      "moonsCount": 28,
+      "majorMoons": ["Titania", "Oberon", "Umbriel", "Ariel", "Miranda"],
+      "moons": [
+        {
+          "id": "titania",
+          "displayName": "Titania",
+          "parentPlanetName": "uranus",
+          "horizonsId": "703",
+          "radiusKm": 788.9,
+          "massKg": 3.527e21,
+          "referenceUrl": "https://en.wikipedia.org/wiki/Titania_(moon)",
+          "info": "Plus grand satellite d'Uranus."
+        },
+        {
+          "id": "oberon",
+          "displayName": "Oberon",
+          "parentPlanetName": "uranus",
+          "horizonsId": "704",
+          "radiusKm": 761.4,
+          "massKg": 3.014e21,
+          "referenceUrl": "https://en.wikipedia.org/wiki/Oberon_(moon)",
+          "info": "Deuxième plus grand satellite d'Uranus."
+        },
+        {
+          "id": "umbriel",
+          "displayName": "Umbriel",
+          "parentPlanetName": "uranus",
+          "horizonsId": "702",
+          "radiusKm": 584.7,
+          "massKg": 1.275e21,
+          "referenceUrl": "https://en.wikipedia.org/wiki/Umbriel_(moon)",
+          "info": "Satellite sombre et très cratérisé."
+        },
+        {
+          "id": "ariel",
+          "displayName": "Ariel",
+          "parentPlanetName": "uranus",
+          "horizonsId": "701",
+          "radiusKm": 578.9,
+          "massKg": 1.251e21,
+          "referenceUrl": "https://en.wikipedia.org/wiki/Ariel_(moon)",
+          "info": "Surface jeune avec failles."
+        },
+        {
+          "id": "miranda",
+          "displayName": "Miranda",
+          "parentPlanetName": "uranus",
+          "horizonsId": "705",
+          "radiusKm": 235.8,
+          "massKg": 6.59e19,
+          "referenceUrl": "https://en.wikipedia.org/wiki/Miranda_(moon)",
+          "info": "Relief extrême et structures atypiques."
+        }
+      ],
+      "hasRings": true,
+      "referenceUrl": "https://en.wikipedia.org/wiki/Uranus",
+      "info": "Geante de glace, axe de rotation fortement incline."
+    },
+    {
+      "name": "neptune",
+      "displayName": "Neptune",
+      "color": "#4f6fff",
+      "radiusKm": 24622,
+      "massKg": 1.02413e26,
+      "semiMajorAxisAU": 30.07,
+      "orbitalPeriodDays": 60182,
+      "rotationPeriodHours": 16.11,
+      "inclinationDeg": 1.77,
+      "axialTiltDeg": 28.32,
+      "moonsCount": 16,
+      "majorMoons": ["Triton", "Nereid"],
+      "moons": [
+        {
+          "id": "triton",
+          "displayName": "Triton",
+          "parentPlanetName": "neptune",
+          "horizonsId": "801",
+          "radiusKm": 1353.4,
+          "massKg": 2.14e22,
+          "referenceUrl": "https://en.wikipedia.org/wiki/Triton_(moon)",
+          "info": "Grand satellite rétrograde."
+        },
+        {
+          "id": "nereid",
+          "displayName": "Néréide",
+          "parentPlanetName": "neptune",
+          "horizonsId": "802",
+          "radiusKm": 170,
+          "massKg": 3.1e19,
+          "referenceUrl": "https://en.wikipedia.org/wiki/Nereid_(moon)",
+          "info": "Satellite à orbite très excentrique."
+        }
+      ],
+      "hasRings": true,
+      "referenceUrl": "https://en.wikipedia.org/wiki/Neptune",
+      "info": "Geante de glace la plus eloignee, vents supersoniques."
+    },
+    {
+      "name": "pluto",
+      "displayName": "Pluton",
+      "color": "#d7c7ba",
+      "radiusKm": 1188.3,
+      "massKg": 1.303e22,
+      "semiMajorAxisAU": 39.482,
+      "orbitalPeriodDays": 90560,
+      "rotationPeriodHours": -153.3,
+      "eccentricity": 0.2488,
+      "inclinationDeg": 17.16,
+      "axialTiltDeg": 122.53,
+      "category": "dwarf",
+      "moonsCount": 5,
+      "majorMoons": ["Charon", "Styx", "Nix", "Kerberos", "Hydra"],
+      "moons": [
+        {
+          "id": "charon",
+          "displayName": "Charon",
+          "parentPlanetName": "pluto",
+          "horizonsId": "901",
+          "radiusKm": 606,
+          "massKg": 1.586e21,
+          "referenceUrl": "https://en.wikipedia.org/wiki/Charon_(moon)",
+          "info": "Plus grand satellite de Pluton."
+        },
+        {
+          "id": "styx",
+          "displayName": "Styx",
+          "parentPlanetName": "pluto",
+          "horizonsId": "905",
+          "radiusKm": 5,
+          "massKg": 7.5e15,
+          "referenceUrl": "https://en.wikipedia.org/wiki/Styx_(moon)",
+          "info": "Petit satellite de Pluton."
+        },
+        {
+          "id": "nix",
+          "displayName": "Nix",
+          "parentPlanetName": "pluto",
+          "horizonsId": "902",
+          "radiusKm": 17,
+          "massKg": 4.5e16,
+          "referenceUrl": "https://en.wikipedia.org/wiki/Nix_(moon)",
+          "info": "Petit satellite de Pluton."
+        },
+        {
+          "id": "kerberos",
+          "displayName": "Kerberos",
+          "parentPlanetName": "pluto",
+          "horizonsId": "904",
+          "radiusKm": 6,
+          "massKg": 1.6e16,
+          "referenceUrl": "https://en.wikipedia.org/wiki/Kerberos_(moon)",
+          "info": "Petit satellite de Pluton."
+        },
+        {
+          "id": "hydra",
+          "displayName": "Hydra",
+          "parentPlanetName": "pluto",
+          "horizonsId": "903",
+          "radiusKm": 25,
+          "massKg": 4.8e17,
+          "referenceUrl": "https://en.wikipedia.org/wiki/Hydra_(moon)",
+          "info": "Petit satellite de Pluton."
+        }
+      ],
+      "hasRings": false,
+      "referenceUrl": "https://en.wikipedia.org/wiki/Pluto",
+      "info": "Planete naine de la ceinture de Kuiper."
+    }
+  ]
+}

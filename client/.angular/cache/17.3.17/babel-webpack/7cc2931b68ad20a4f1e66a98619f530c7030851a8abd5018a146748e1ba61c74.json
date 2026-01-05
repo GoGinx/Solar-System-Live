@@ -1,0 +1,1 @@
+{"ast":null,"code":"export const environment = {\n  production: false,\n  apiBaseUrl: 'http://localhost:3000/api/ephemeris',\n  catalogUrl: 'http://localhost:3000/api/catalog'\n};","map":null,"metadata":{},"sourceType":"module","externalDependencies":[]}

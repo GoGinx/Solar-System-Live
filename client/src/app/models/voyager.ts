@@ -1,19 +1,25 @@
-export interface VoyagerVector {
+export interface VoyagerPositionVector {
   x: number | null;
   y: number | null;
   z: number | null;
+}
+
+export interface VoyagerVelocityVector {
+  vx: number | null;
+  vy: number | null;
+  vz: number | null;
 }
 
 export interface VoyagerData {
   id: 'voyager1' | 'voyager2';
   name: string;
   horizonsId: string;
-  positionAu: VoyagerVector;
-  positionKm: VoyagerVector | null;
-  positionMiles: VoyagerVector | null;
-  velocityAuPerDay: VoyagerVector;
-  velocityKmPerS: VoyagerVector | null;
-  velocityMilesPerS: VoyagerVector | null;
+  positionAu: VoyagerPositionVector;
+  positionKm: VoyagerPositionVector | null;
+  positionMiles: VoyagerPositionVector | null;
+  velocityAuPerDay: VoyagerVelocityVector;
+  velocityKmPerS: VoyagerVelocityVector | null;
+  velocityMilesPerS: VoyagerVelocityVector | null;
   distanceFromSun: { au: number | null; km: number | null; miles: number | null };
   distanceFromEarth?: { au: number | null; km: number | null; miles: number | null };
   speed: { auPerDay: number | null; kmPerS: number | null; milesPerS: number | null };
@@ -46,3 +52,4 @@ export interface VoyagerSnapshot {
   };
   voyagers: VoyagerData[];
 }
+
