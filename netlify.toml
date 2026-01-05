@@ -8,11 +8,11 @@
   NODE_VERSION = "18"
 
 [dev]
-  # Pour `netlify dev`: un seul serveur (build front + API Express qui sert le dist).
-  command = "npm --prefix .. run dev"
+  # For `netlify dev`: start API on 3000 and client on 4201 (proxy on 4200).
+  command = "powershell -Command \"Start-Process npm -ArgumentList '--prefix','server','run','dev' -WorkingDirectory ..; npm run start -- --port 4201\""
   # Port d'écoute de Netlify Dev (proxy local) et port cible du serveur API/front.
-  port = 8888
-  targetPort = 4200
+  port = 4200
+  targetPort = 4201
   framework = "#custom"
   publish = "client/dist/solar-system-real-client"
 
